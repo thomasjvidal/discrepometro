@@ -1,11 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { parseSync } from "https://deno.land/std@0.208.0/csv/mod.ts"
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
+import * as XLSX from "https://esm.sh/xlsx@0.18.5"
 
-console.log("Função upload_csv iniciada")
+console.log("Função upload_xlsx iniciada")
 
-// Funciona em requests POST multipart/form-data
 serve(async (req) => {
   try {
     console.log("Nova requisição recebida:", {
@@ -41,42 +40,30 @@ serve(async (req) => {
     })
 
     if (!file || !user_id) {
-      return new Response("Arquivo CSV ou user_id ausente", { status: 400 })
+      return new Response("Arquivo XLSX ou user_id ausente", { status: 400 })
     }
 
-    // CSV -> Texto
+    // XLSX -> ArrayBuffer
     const arrayBuffer = await file.arrayBuffer()
-    let csvText = new TextDecoder("utf-8").decode(arrayBuffer)
-    csvText = csvText.replace(/\r/g, "").replace(/^\uFEFF/, "")
+    const workbook = XLSX.read(arrayBuffer, { type: "array" })
+    const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
+    const jsonData = XLSX.utils.sheet_to_json(firstSheet)
 
-    console.log("Conteúdo do CSV:", csvText)
-
-    // Parse manual
-    const lines = csvText.split("\n")
-    const parsedData: { cfop: string; valor: number }[] = []
-
-    for (let i = 1; i < lines.length; i++) {
-      const [cfop, valor] = lines[i].split(",")
-
-      if (!cfop || isNaN(parseFloat(valor))) continue
-
-      parsedData.push({
-        cfop: cfop.trim(),
-        valor: parseFloat(valor.trim()),
-      })
-    }
-
-    console.log("Dados parseados:", parsedData)
-    console.log("Número de linhas:", parsedData.length)
+    console.log("Dados do XLSX:", jsonData)
 
     // Montar dados para inserir
     const rows: { user_id: string; cfop: string; valor: number }[] = []
 
-    for (const row of parsedData) {
+    for (const row of jsonData) {
+      const cfop = String(row["CFOP"] || row["cfop"] || "")
+      const valor = Number(row["VALOR"] || row["valor"] || 0)
+
+      if (!cfop || isNaN(valor)) continue
+
       rows.push({
         user_id,
-        cfop: row.cfop,
-        valor: row.valor,
+        cfop: cfop.trim(),
+        valor: valor,
       })
     }
 
@@ -104,4 +91,4 @@ serve(async (req) => {
     console.error("Erro interno:", err)
     return new Response("Erro interno do servidor", { status: 500 })
   }
-})
+}) 

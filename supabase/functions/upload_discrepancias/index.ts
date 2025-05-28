@@ -1,9 +1,6 @@
 // Função de comparação inteligente entre PDFs e planilha .xlsx
 import { serve } from "https://deno.land/std@0.192.0/http/server.ts";
-import * as pdfjsLib from "npm:pdfjs-dist";
-import * as XLSX from "npm:xlsx";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 
 serve(async (req) => {
   try {

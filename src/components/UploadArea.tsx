@@ -1,7 +1,6 @@
-
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, FileText, Database } from 'lucide-react';
+import { Upload, FileText, Database, Table } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 
 interface UploadAreaProps {
@@ -22,7 +21,8 @@ const UploadArea = ({ onFileUpload }: UploadAreaProps) => {
     onDragLeave: () => setIsDragActive(false),
     accept: {
       'text/csv': ['.csv'],
-      'application/pdf': ['.pdf']
+      'application/pdf': ['.pdf'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
     },
     multiple: true
   });
@@ -68,7 +68,7 @@ const UploadArea = ({ onFileUpload }: UploadAreaProps) => {
               {isDragActive ? 'Solte os arquivos aqui' : 'Arraste os arquivos ou clique para selecionar'}
             </h3>
             <p className="text-dark-400">
-              Suporte para CSV e PDF • Até 100MB por arquivo
+              Suporte para CSV, PDF e XLSX • Até 100MB por arquivo
             </p>
           </div>
 
@@ -82,6 +82,11 @@ const UploadArea = ({ onFileUpload }: UploadAreaProps) => {
             <div className="flex items-center gap-2 text-dark-500">
               <FileText className="w-5 h-5" />
               <span className="text-sm">PDF</span>
+            </div>
+            <div className="w-px h-6 bg-dark-700"></div>
+            <div className="flex items-center gap-2 text-dark-500">
+              <Table className="w-5 h-5" />
+              <span className="text-sm">XLSX</span>
             </div>
           </div>
         </div>

@@ -1,462 +1,438 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { parse } from 'papaparse';
+import { Upload, FileText, AlertCircle, CheckCircle, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import pdfParse from 'pdf-parse';
-import { toast } from 'sonner';
+import * as pdfjsLib from 'pdfjs-dist/webpack';
 
-interface Discrepancia {
-  codigo: string;
-  nome: string;
-  quantidade_inventario: number;
-  quantidade_transacoes: number;
-  diferenca: number;
-}
+// Configurar worker do PDF.js
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
-interface ProdutoInventario {
-  codigo: string;
-  nome: string;
-  quantidade: number;
-  unidade: string;
-  ano: number;
-  pagina: number;
-}
+const DiscrepancyUpload = () => {
+  const [files, setFiles] = useState({
+    pdf: null,
+    excel: null
+  });
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [debugInfo, setDebugInfo] = useState([]);
 
-interface Transacao {
-  data: Date;
-  produto: string;
-  cfop: string;
-  quantidade: number;
-  valor: number;
-}
+  const addDebugInfo = (message) => {
+    console.log(message);
+    setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
+  };
 
-const DiscrepometroUpload: React.FC = () => {
-  const [pdf1, setPdf1] = useState<File | null>(null);
-  const [pdf2, setPdf2] = useState<File | null>(null);
-  const [planilha, setPlanilha] = useState<File | null>(null);
-  const [processando, setProcessando] = useState(false);
-  const [progresso, setProgresso] = useState<string>('');
-  const [resultados, setResultados] = useState<{
-    discrepancias: Discrepancia[];
-    topProdutos: any[];
-    resumo: any;
-  } | null>(null);
+  // Função para fazer upload do arquivo XLSX para o Supabase
+  const handleXlsxUpload = async (file: File) => {
+    addDebugInfo(`Iniciando upload do arquivo XLSX: ${file.name}`);
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('user_id', '07b94f69-1eba-4ef0-83b3-4d240966597c');
 
-  const processarPDF = async (file: File): Promise<ProdutoInventario[]> => {
     try {
-      setProgresso('Lendo PDF...');
-      
-      const arrayBuffer = await file.arrayBuffer();
-      const data = await pdfParse(arrayBuffer);
-      const texto = data.text;
-      
-      // Detectar ano do cabeçalho
-      const anoMatch = texto.match(/PERÍODO DA ESCRITURAÇÃO:\s*\d{2}\/\d{2}\/(\d{4})/);
-      const ano = anoMatch ? parseInt(anoMatch[1]) : 2022;
-      
-      console.log(`Ano detectado no PDF: ${ano}`);
-      
-      // Padrão para linhas de produtos baseado no formato real
-      const padrao = /(\d+)\s+([A-Z][A-Z\s\-\/\.\d]+)\s+(\d+[.,]?\d*)\s+(UN|PC|KG|LT)/g;
-      const produtos: ProdutoInventario[] = [];
-      let match;
-      
-      while ((match = padrao.exec(texto)) !== null) {
-        const [, codigo, descricao, quantidade, unidade] = match;
-        
-        const descricaoLimpa = descricao.replace(/\s+/g, ' ').trim();
-        const qtd = parseFloat(quantidade.replace(',', '.'));
-        
-        if (qtd > 0 && descricaoLimpa.length > 3) {
-          produtos.push({
-            codigo: codigo.trim(),
-            nome: descricaoLimpa,
-            quantidade: qtd,
-            unidade: unidade,
-            ano: ano,
-            pagina: 1
-          });
-        }
-      }
-      
-      console.log(`PDF ${ano}: ${produtos.length} produtos extraídos`);
-      return produtos;
-      
-    } catch (error) {
-      console.error('Erro ao processar PDF:', error);
-      throw new Error(`Falha ao processar PDF: ${error.message}`);
+      const res = await fetch('https://hvjjcegcdivumprqviug.supabase.co/functions/v1/upload_xlsx', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2ampjZWdjZGl2dW1wcnF2aXVnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NzY3ODUwMCwiZXhwIjoyMDYzMjU0NTAwfQ.KxnvLHj6Q4pqZ0C2OXIMNxgXVth0Uvo0WPBW638K578`
+        },
+        body: formData
+      });
+
+      const data = await res.json();
+      addDebugInfo(`✅ Upload XLSX concluído: ${JSON.stringify(data)}`);
+      return data;
+    } catch (err) {
+      const errorMsg = `Erro ao fazer upload XLSX: ${err.message}`;
+      addDebugInfo(`❌ ${errorMsg}`);
+      throw new Error(errorMsg);
     }
   };
 
-  const detectarColunas = (headers: string[]): Record<string, string> => {
-    const mapeamento: Record<string, string> = {};
+  // Função para processar arquivos Excel
+  const processExcelFile = async (file) => {
+    addDebugInfo(`Processando Excel: ${file.name}`);
     
-    // Padrões para detectar colunas
-    const padroes = {
-      data: /data|dt|emissao|emissão/i,
-      produto: /produto|item|descrição|descricao|nome/i,
-      cfop: /cfop|código\s*fiscal/i,
-      quantidade: /quantidade|qtd|qtde/i,
-      valor: /valor|preço|preco|unitário|unitario/i
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          addDebugInfo('Lendo dados do Excel...');
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { 
+            type: 'array',
+            cellDates: true,
+            cellStyles: true 
+          });
+          
+          addDebugInfo(`Planilhas encontradas: ${workbook.SheetNames.join(', ')}`);
+          
+          // Pega a primeira planilha
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          
+          // Converte para JSON
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+            header: 1, // Usa array de arrays
+            defval: '', // Valor padrão para células vazias
+            raw: false // Converte números para strings
+          });
+          
+          addDebugInfo(`✅ Excel processado: ${jsonData.length} linhas`);
+          resolve(jsonData);
+        } catch (error) {
+          addDebugInfo(`❌ Erro ao processar Excel: ${error.message}`);
+          reject(error);
+        }
+      };
+      reader.onerror = () => {
+        addDebugInfo('❌ Erro ao ler arquivo Excel');
+        reject(new Error('Erro ao ler arquivo Excel'));
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  // Função para processar PDF
+  const processPDFFile = async (file) => {
+    addDebugInfo(`Processando PDF: ${file.name}`);
+    
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          addDebugInfo('Lendo dados do PDF...');
+          const typedarray = new Uint8Array(e.target.result);
+          const pdf = await pdfjsLib.getDocument(typedarray).promise;
+          
+          addDebugInfo(`PDF tem ${pdf.numPages} páginas`);
+          
+          let fullText = '';
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map(item => item.str).join(' ');
+            fullText += pageText + '\n';
+          }
+          
+          addDebugInfo(`✅ PDF processado: ${fullText.length} caracteres`);
+          resolve(fullText);
+        } catch (error) {
+          addDebugInfo(`❌ Erro ao processar PDF: ${error.message}`);
+          reject(error);
+        }
+      };
+      reader.onerror = () => {
+        addDebugInfo('❌ Erro ao ler arquivo PDF');
+        reject(new Error('Erro ao ler arquivo PDF'));
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  const handleFileUpload = async (fileType, file) => {
+    if (!file) return;
+
+    addDebugInfo(`Upload iniciado: ${fileType} - ${file.name}`);
+    setError(null);
+    
+    // Validações de tipo de arquivo
+    const validTypes = {
+      pdf: ['application/pdf'],
+      excel: [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+        'application/vnd.ms-excel'
+      ]
     };
 
-    headers.forEach(header => {
-      Object.entries(padroes).forEach(([tipo, padrao]) => {
-        if (padrao.test(header)) {
-          mapeamento[tipo] = header;
-        }
-      });
-    });
+    // Verifica se é um arquivo Excel pela extensão
+    const isExcelByExtension = fileType === 'excel' && 
+      ['.xlsx', '.xls'].some(ext => 
+        file.name.toLowerCase().endsWith(ext)
+      );
 
-    return mapeamento;
-  };
-
-  const processarPlanilha = async (file: File): Promise<Transacao[]> => {
-    try {
-      setProgresso('Lendo planilha...');
-      return new Promise((resolve, reject) => {
-        if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            try {
-              const data = new Uint8Array(e.target?.result as ArrayBuffer);
-              const workbook = XLSX.read(data, { type: 'array' });
-              const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-              const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-              
-              // Detectar cabeçalhos
-              const headers = jsonData[0] as string[];
-              const mapeamento = detectarColunas(headers);
-              
-              console.log('Mapeamento de colunas detectado:', mapeamento);
-
-              // Validar mapeamento
-              const colunasObrigatorias = ['data', 'produto', 'cfop', 'quantidade'];
-              const colunasFaltantes = colunasObrigatorias.filter(col => !mapeamento[col]);
-              
-              if (colunasFaltantes.length > 0) {
-                throw new Error(`Colunas obrigatórias não encontradas: ${colunasFaltantes.join(', ')}`);
-              }
-
-              // Processar linhas
-              const transacoes: Transacao[] = [];
-              for (let i = 1; i < jsonData.length; i++) {
-                const row = jsonData[i] as any[];
-                if (row.length >= headers.length) {
-                  transacoes.push({
-                    data: new Date(row[headers.indexOf(mapeamento.data)]),
-                    produto: String(row[headers.indexOf(mapeamento.produto)]),
-                    cfop: String(row[headers.indexOf(mapeamento.cfop)]),
-                    quantidade: Number(row[headers.indexOf(mapeamento.quantidade)]),
-                    valor: mapeamento.valor ? Number(row[headers.indexOf(mapeamento.valor)]) : 0
-                  });
-                }
-              }
-
-              console.log(`Processadas ${transacoes.length} transações`);
-              resolve(transacoes);
-            } catch (error) {
-              reject(error);
-            }
-          };
-          reader.readAsArrayBuffer(file);
-        } else {
-          parse(file, {
-            header: true,
-            complete: (results) => {
-              try {
-                const headers = results.meta.fields || [];
-                const mapeamento = detectarColunas(headers);
-                
-                console.log('Mapeamento de colunas detectado:', mapeamento);
-
-                // Validar mapeamento
-                const colunasObrigatorias = ['data', 'produto', 'cfop', 'quantidade'];
-                const colunasFaltantes = colunasObrigatorias.filter(col => !mapeamento[col]);
-                
-                if (colunasFaltantes.length > 0) {
-                  throw new Error(`Colunas obrigatórias não encontradas: ${colunasFaltantes.join(', ')}`);
-                }
-
-                const transacoes: Transacao[] = results.data.map((row: any) => ({
-                  data: new Date(row[mapeamento.data]),
-                  produto: String(row[mapeamento.produto]),
-                  cfop: String(row[mapeamento.cfop]),
-                  quantidade: Number(row[mapeamento.quantidade]),
-                  valor: mapeamento.valor ? Number(row[mapeamento.valor]) : 0
-                }));
-
-                console.log(`Processadas ${transacoes.length} transações`);
-                resolve(transacoes);
-              } catch (error) {
-                reject(error);
-              }
-            },
-            error: reject
-          });
-        }
-      });
-    } catch (error) {
-      console.error('Erro ao processar planilha:', error);
-      throw new Error(`Falha ao processar planilha: ${error.message}`);
-    }
-  };
-
-  const detectarDiscrepancias = (
-    inventario1: ProdutoInventario[],
-    inventario2: ProdutoInventario[],
-    transacoes: Transacao[]
-  ): Discrepancia[] => {
-    try {
-      setProgresso('Detectando discrepâncias...');
-      const discrepancias: Discrepancia[] = [];
-      
-      // Agrupar transações por produto
-      const transacoesPorProduto = transacoes.reduce((acc, t) => {
-        if (!acc[t.produto]) {
-          acc[t.produto] = {
-            compras: 0,
-            vendas: 0
-          };
-        }
-        
-        if (t.cfop.startsWith('1')) {
-          acc[t.produto].compras += t.quantidade;
-        } else if (t.cfop.startsWith('5')) {
-          acc[t.produto].vendas += t.quantidade;
-        }
-        
-        return acc;
-      }, {} as Record<string, { compras: number; vendas: number }>);
-
-      // Comparar estoques
-      inventario2.forEach(produto2 => {
-        const produto1 = inventario1.find(p => p.codigo === produto2.codigo);
-        const transacoes = transacoesPorProduto[produto2.nome] || { compras: 0, vendas: 0 };
-        
-        const estoque1 = produto1?.quantidade || 0;
-        const estoque2 = produto2.quantidade;
-        const compras = transacoes.compras;
-        const vendas = transacoes.vendas;
-        
-        const estoqueEsperado = estoque1 + compras - vendas;
-        const diferenca = estoque2 - estoqueEsperado;
-
-        if (Math.abs(diferenca) > 10) { // Tolerância de 10 unidades
-          discrepancias.push({
-            codigo: produto2.codigo,
-            nome: produto2.nome,
-            quantidade_inventario: estoque2,
-            quantidade_transacoes: estoqueEsperado,
-            diferenca
-          });
-        }
-      });
-
-      console.log(`Detectadas ${discrepancias.length} discrepâncias`);
-      return discrepancias;
-
-    } catch (error) {
-      console.error('Erro ao detectar discrepâncias:', error);
-      throw new Error(`Falha ao detectar discrepâncias: ${error.message}`);
-    }
-  };
-
-  const salvarNoSupabase = async (discrepancias: Discrepancia[]) => {
-    try {
-      setProgresso('Salvando no Supabase...');
-      const { error } = await supabase
-        .from('discrepancies')
-        .insert(
-          discrepancias.map(d => ({
-            product_name: d.nome,
-            product_code: d.codigo,
-            discrepancy_type: d.diferenca > 0 ? 'estoque_excedente' : 'estoque_faltante',
-            description: `Diferença de ${d.diferenca} unidades`,
-            year_1_stock: 0,
-            year_2_stock: d.quantidade_inventario,
-            expected_stock: d.quantidade_transacoes,
-            difference: d.diferenca,
-            severity: Math.abs(d.diferenca) > 100 ? 'high' : 'medium',
-            created_at: new Date().toISOString()
-          }))
-        );
-
-      if (error) throw error;
-      console.log('Discrepâncias salvas no Supabase');
-      toast.success('Discrepâncias salvas com sucesso!');
-
-    } catch (error) {
-      console.error('Erro ao salvar no Supabase:', error);
-      toast.error('Erro ao salvar discrepâncias');
-      throw error;
-    }
-  };
-
-  const processar = async () => {
-    if (!pdf1 || !pdf2 || !planilha) {
-      toast.error('Por favor, selecione todos os arquivos necessários');
+    const isValidType = validTypes[fileType].includes(file.type) || isExcelByExtension;
+    
+    if (!isValidType) {
+      const errorMsg = `Tipo de arquivo inválido para ${fileType}. Esperado: ${validTypes[fileType].join(', ')}. Recebido: ${file.type}`;
+      setError(errorMsg);
+      addDebugInfo(`❌ ${errorMsg}`);
       return;
     }
 
-    setProcessando(true);
-    setProgresso('Iniciando processamento...');
+    addDebugInfo(`✅ Tipo de arquivo válido: ${file.type}`);
     
     try {
-      // Processar arquivos
-      const inventario1 = await processarPDF(pdf1);
-      const inventario2 = await processarPDF(pdf2);
-      const transacoes = await processarPlanilha(planilha);
-
-      console.log('Inventário 1:', inventario1.length, 'produtos');
-      console.log('Inventário 2:', inventario2.length, 'produtos');
-      console.log('Transações:', transacoes.length, 'registros');
-
-      // Detectar discrepâncias
-      const discrepancias = detectarDiscrepancias(inventario1, inventario2, transacoes);
+      if (fileType === 'excel') {
+        // Se for XLSX, faz upload para o Supabase
+        await handleXlsxUpload(file);
+      }
       
-      // Salvar no Supabase
-      await salvarNoSupabase(discrepancias);
-
-      // Mostrar resultados
-      setResultados({
-        discrepancias,
-        topProdutos: [], // Implementar depois
-        resumo: {
-          totalInventario1: inventario1.length,
-          totalInventario2: inventario2.length,
-          totalTransacoes: transacoes.length,
-          totalDiscrepancias: discrepancias.length
-        }
-      });
-
-      toast.success('Processamento concluído com sucesso!');
-
+      setFiles(prev => ({
+        ...prev,
+        [fileType]: file
+      }));
     } catch (error) {
-      console.error('Erro no processamento:', error);
-      toast.error(`Erro no processamento: ${error.message}`);
-    } finally {
-      setProcessando(false);
-      setProgresso('');
+      setError(error.message);
     }
   };
 
+  const processFiles = async () => {
+    if (!files.pdf || !files.excel) {
+      setError('Por favor, carregue os dois tipos de arquivo (PDF e Excel).');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setDebugInfo([]);
+    addDebugInfo('Iniciando processamento dos arquivos...');
+
+    try {
+      // Processar cada arquivo
+      addDebugInfo('Processando arquivos em paralelo...');
+      const [pdfData, excelData] = await Promise.all([
+        processPDFFile(files.pdf),
+        processExcelFile(files.excel)
+      ]);
+
+      // Aqui você implementaria a lógica de comparação
+      const discrepancies = compareData(pdfData, excelData);
+      
+      const results = {
+        pdfText: pdfData,
+        pdfItems: typeof pdfData === 'string' ? pdfData.split('\n').filter(line => line.trim()) : [],
+        excelItems: excelData,
+        discrepancies: discrepancies
+      };
+
+      addDebugInfo('✅ Processamento concluído com sucesso!');
+      setResults(results);
+
+    } catch (error) {
+      const errorMsg = `Erro ao processar arquivos: ${error.message}`;
+      addDebugInfo(`❌ ${errorMsg}`);
+      setError(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Função simples de comparação
+  const compareData = (pdfData, excelData) => {
+    const discrepancies = [];
+    
+    const pdfLines = typeof pdfData === 'string' ? pdfData.split('\n').filter(line => line.trim()) : [];
+    
+    discrepancies.push({
+      type: 'count',
+      description: `PDF: ${pdfLines.length} linhas de texto, Excel: ${excelData.length} linhas`
+    });
+
+    // Aqui você pode adicionar mais lógica de comparação específica
+    if (pdfLines.length !== excelData.length) {
+      discrepancies.push({
+        type: 'difference',
+        description: `Diferença na quantidade: PDF tem ${pdfLines.length} itens, Excel tem ${excelData.length} itens`
+      });
+    }
+
+    return discrepancies;
+  };
+
+  const downloadResults = () => {
+    if (!results) return;
+
+    const reportData = {
+      timestamp: new Date().toISOString(),
+      files: {
+        pdf: files.pdf?.name,
+        excel: files.excel?.name
+      },
+      summary: {
+        pdfLines: results.pdfItems.length,
+        excelRows: results.excelItems.length
+      },
+      discrepancies: results.discrepancies,
+      debugLog: debugInfo
+    };
+
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `discrepancy-report-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const FileUploadArea = ({ type, label, accept, file }) => (
+    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors cursor-pointer">
+      <input
+        type="file"
+        id={`file-${type}`}
+        accept={type === 'excel' ? '.xlsx,.xls' : accept}
+        onChange={(e) => handleFileUpload(type, e.target.files[0])}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+      />
+      <Upload className="mx-auto h-16 w-16 text-gray-400 mb-4" />
+      <p className="text-lg font-medium text-gray-700 mb-2">{label}</p>
+      <p className="text-sm text-gray-500 mb-1">Clique aqui para selecionar</p>
+      <p className="text-xs text-gray-400">ou arraste o arquivo para esta área</p>
+      <button 
+        onClick={(e) => {
+          e.stopPropagation();
+          document.getElementById(`file-${type}`).click();
+        }}
+        className="mt-2 text-sm text-blue-600 hover:text-blue-700"
+      >
+        Mostrar Opções
+      </button>
+      {file && (
+        <div className="mt-4 p-3 bg-green-50 rounded-lg">
+          <div className="flex items-center justify-center text-sm text-green-700">
+            <CheckCircle className="h-4 w-4 mr-2" />
+            <span className="font-medium">{file.name}</span>
+          </div>
+          <p className="text-xs text-green-600 mt-1">
+            {(file.size / (1024 * 1024)).toFixed(2)} MB
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <h2 className="text-3xl font-bold text-center mb-8 text-gray-800">
-        Discrepômetro - Análise de Inventário
-      </h2>
-
-      {/* Upload de Arquivos */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="border-2 border-dashed border-blue-300 rounded-lg p-6 text-center">
-          <h3 className="font-semibold mb-4 text-blue-800">PDF Inventário Ano 1</h3>
-          <input
-            type="file"
-            accept=".pdf"
-            onChange={(e) => setPdf1(e.target.files?.[0] || null)}
-            className="w-full mb-2"
-          />
-          {pdf1 && <p className="text-green-600 text-sm">✓ {pdf1.name}</p>}
-        </div>
-
-        <div className="border-2 border-dashed border-green-300 rounded-lg p-6 text-center">
-          <h3 className="font-semibold mb-4 text-green-800">PDF Inventário Ano 2</h3>
-          <input
-            type="file"
-            accept=".pdf"
-            onChange={(e) => setPdf2(e.target.files?.[0] || null)}
-            className="w-full mb-2"
-          />
-          {pdf2 && <p className="text-green-600 text-sm">✓ {pdf2.name}</p>}
-        </div>
-
-        <div className="border-2 border-dashed border-purple-300 rounded-lg p-6 text-center">
-          <h3 className="font-semibold mb-4 text-purple-800">Planilha Transações</h3>
-          <input
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            onChange={(e) => setPlanilha(e.target.files?.[0] || null)}
-            className="w-full mb-2"
-          />
-          {planilha && <p className="text-green-600 text-sm">✓ {planilha.name}</p>}
-        </div>
+    <div className="max-w-6xl mx-auto p-6 bg-white min-h-screen">
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold text-gray-900 mb-4">
+          Discrepômetro Golden Nexus
+        </h1>
+        <p className="text-lg text-gray-600">
+          Compare inventários PDF com planilhas Excel para identificar discrepâncias
+        </p>
       </div>
 
-      {/* Botão de Processamento */}
-      <div className="text-center mb-8">
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center">
+          <AlertCircle className="h-5 w-5 text-red-500 mr-3" />
+          <span className="text-red-700">{error}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        <FileUploadArea
+          type="pdf"
+          label="Inventário PDF"
+          accept=".pdf"
+          file={files.pdf}
+        />
+        <FileUploadArea
+          type="excel"
+          label="Planilha Excel"
+          accept=".xlsx,.xls"
+          file={files.excel}
+        />
+      </div>
+
+      <div className="flex justify-center mb-8">
         <button
-          onClick={processar}
-          disabled={processando || !pdf1 || !pdf2 || !planilha}
-          className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold text-lg disabled:bg-gray-400 hover:bg-blue-700 transition-colors"
+          onClick={processFiles}
+          disabled={loading || !files.pdf || !files.excel}
+          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-4 px-8 rounded-lg transition-colors flex items-center text-lg"
         >
-          {processando ? `Processando... ${progresso}` : 'Processar e Detectar Discrepâncias'}
+          {loading ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+              Processando...
+            </>
+          ) : (
+            <>
+              <FileText className="h-5 w-5 mr-3" />
+              Processar e Comparar
+            </>
+          )}
         </button>
       </div>
 
-      {/* Resultados */}
-      {resultados && (
-        <div className="mt-8">
-          <h3 className="text-2xl font-bold mb-4">Resultados da Análise</h3>
-          
-          {/* Resumo */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-blue-100 p-4 rounded-lg text-center">
-              <div className="text-2xl font-bold text-blue-600">{resultados.resumo.totalInventario1}</div>
-              <div className="text-sm text-blue-800">Produtos Ano 1</div>
+      {/* Debug Info */}
+      {debugInfo.length > 0 && (
+        <div className="mb-6 bg-gray-50 rounded-lg p-4">
+          <h3 className="font-medium text-gray-900 mb-3">Log de Processamento:</h3>
+          <div className="max-h-40 overflow-y-auto bg-gray-800 text-green-400 p-3 rounded font-mono text-sm">
+            {debugInfo.map((info, index) => (
+              <div key={index} className="mb-1">
+                {info}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {results && (
+        <div className="bg-gray-50 rounded-lg p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-semibold text-gray-900">Resultados da Análise</h2>
+            <button
+              onClick={downloadResults}
+              className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Baixar Relatório
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="font-medium text-gray-900 mb-2">Inventário PDF</h3>
+              <p className="text-3xl font-bold text-blue-600">{results.pdfItems.length}</p>
+              <p className="text-sm text-gray-600">linhas de texto</p>
             </div>
-            <div className="bg-green-100 p-4 rounded-lg text-center">
-              <div className="text-2xl font-bold text-green-600">{resultados.resumo.totalInventario2}</div>
-              <div className="text-sm text-green-800">Produtos Ano 2</div>
-            </div>
-            <div className="bg-purple-100 p-4 rounded-lg text-center">
-              <div className="text-2xl font-bold text-purple-600">{resultados.resumo.totalTransacoes}</div>
-              <div className="text-sm text-purple-800">Transações</div>
-            </div>
-            <div className="bg-red-100 p-4 rounded-lg text-center">
-              <div className="text-2xl font-bold text-red-600">{resultados.resumo.totalDiscrepancias}</div>
-              <div className="text-sm text-red-800">Discrepâncias</div>
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="font-medium text-gray-900 mb-2">Planilha Excel</h3>
+              <p className="text-3xl font-bold text-green-600">{results.excelItems.length}</p>
+              <p className="text-sm text-gray-600">linhas processadas</p>
             </div>
           </div>
 
-          {/* Tabela de Discrepâncias */}
-          {resultados.discrepancias.length > 0 && (
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <div className="bg-red-50 px-6 py-3 border-b">
-                <h4 className="text-lg font-semibold text-red-800">
-                  Discrepâncias Detectadas ({resultados.discrepancias.length})
-                </h4>
-              </div>
+          {results.discrepancies.length > 0 && (
+            <div className="bg-white rounded-lg shadow p-6 mb-6">
+              <h3 className="font-medium text-gray-900 mb-4">Discrepâncias Encontradas</h3>
+              <ul className="space-y-3">
+                {results.discrepancies.map((discrepancy, index) => (
+                  <li key={index} className="flex items-start">
+                    <AlertCircle className="h-5 w-5 text-orange-500 mr-3 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-700">{discrepancy.description}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Prévia dos dados Excel */}
+          {results.excelItems.length > 0 && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="font-medium text-gray-900 mb-4">Prévia dos dados Excel (primeiras 10 linhas)</h3>
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Produto</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estoque Real</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estoque Esperado</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Diferença</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {resultados.discrepancias.map((disc, index) => (
-                      <tr key={index} className={disc.diferenca < 0 ? 'bg-red-50' : 'bg-yellow-50'}>
-                        <td className="px-6 py-4 font-medium">{disc.nome}</td>
-                        <td className="px-6 py-4">{disc.quantidade_inventario.toLocaleString()}</td>
-                        <td className="px-6 py-4">{disc.quantidade_transacoes.toLocaleString()}</td>
-                        <td className={`px-6 py-4 font-bold ${disc.diferenca < 0 ? 'text-red-600' : 'text-yellow-600'}`}>
-                          {disc.diferenca > 0 ? '+' : ''}{disc.diferenca.toLocaleString()}
-                        </td>
+                <table className="min-w-full divide-y divide-gray-200">
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {results.excelItems.slice(0, 10).map((row, index) => (
+                      <tr key={index} className={index === 0 ? 'bg-gray-50 font-medium' : ''}>
+                        {Array.isArray(row) ? row.map((cell, cellIndex) => (
+                          <td key={cellIndex} className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 border">
+                            {cell || '(vazio)'}
+                          </td>
+                        )) : (
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 border">
+                            {JSON.stringify(row)}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </div>
-          )}
-
-          {resultados.discrepancias.length === 0 && (
-            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded text-center">
-              ✅ Nenhuma discrepância significativa encontrada!
             </div>
           )}
         </div>
@@ -465,4 +441,4 @@ const DiscrepometroUpload: React.FC = () => {
   );
 };
 
-export default DiscrepometroUpload; 
+export default DiscrepancyUpload; 
