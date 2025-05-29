@@ -1,6 +1,8 @@
-
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface DiscrepancyItem {
   id: number;
@@ -8,26 +10,35 @@ interface DiscrepancyItem {
   codigo: string;
   entradas: number;
   saidas: number;
-  estoqueInicial: number;
-  estoqueFinal: number;
-  estoqueFinalCalculado: number;
-  discrepancia: string;
+  est_inicial: number;
+  est_final: number;
+  est_calculado: number;
+  discrepancia_tipo: string;
+  observacoes: string;
 }
 
 interface DiscrepancyTableProps {
   data: DiscrepancyItem[];
 }
 
+const ITEMS_PER_PAGE = 50;
+
 const DiscrepancyTable = ({ data }: DiscrepancyTableProps) => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.ceil(data.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const currentData = data.slice(startIndex, endIndex);
+
   const getDiscrepancyBadge = (discrepancia: string) => {
     const variants = {
       'Sem Discrepância': 'bg-green-500/20 text-green-400 border-green-500/30',
-      'Compra sem Nota': 'bg-red-500/20 text-red-400 border-red-500/30',
-      'Venda sem Nota': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+      'Estoque Excedente': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+      'Estoque Faltante': 'bg-red-500/20 text-red-400 border-red-500/30'
     };
 
     return (
-      <Badge className={`${variants[discrepancia as keyof typeof variants]} border`}>
+      <Badge className={`${variants[discrepancia as keyof typeof variants] || 'bg-gray-500/20 text-gray-400 border-gray-500/30'} border`}>
         {discrepancia}
       </Badge>
     );
@@ -45,7 +56,12 @@ const DiscrepancyTable = ({ data }: DiscrepancyTableProps) => {
   return (
     <div className="overflow-x-auto">
       <div className="p-6">
-        <h3 className="text-xl font-semibold text-foreground mb-6">Resultados da Análise</h3>
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-semibold text-foreground">Resultados da Análise</h3>
+          <div className="text-sm text-dark-400">
+            Mostrando {startIndex + 1}-{Math.min(endIndex, data.length)} de {data.length} itens
+          </div>
+        </div>
         
         <div className="overflow-hidden rounded-xl border border-dark-700/50">
           <table className="w-full">
@@ -62,7 +78,7 @@ const DiscrepancyTable = ({ data }: DiscrepancyTableProps) => {
               </tr>
             </thead>
             <tbody>
-              {data.map((item, index) => (
+              {currentData.map((item, index) => (
                 <tr
                   key={item.id}
                   className={`
@@ -83,29 +99,53 @@ const DiscrepancyTable = ({ data }: DiscrepancyTableProps) => {
                     <div className="text-red-400 font-medium">-{item.saidas}</div>
                   </td>
                   <td className="p-4 text-right">
-                    <div className="text-dark-300">{item.estoqueInicial}</div>
+                    <div className="text-dark-300">{item.est_inicial}</div>
                   </td>
                   <td className="p-4 text-right">
-                    <div className="text-dark-300">{item.estoqueFinal}</div>
+                    <div className="text-dark-300">{item.est_final}</div>
                   </td>
                   <td className="p-4 text-right">
                     <div className={`
                       font-medium
-                      ${item.estoqueFinalCalculado !== item.estoqueFinal 
+                      ${item.est_final !== item.est_calculado
                         ? 'text-yellow-400' 
                         : 'text-green-400'
                       }
                     `}>
-                      {item.estoqueFinalCalculado}
+                      {item.est_calculado}
                     </div>
                   </td>
                   <td className="p-4 text-center">
-                    {getDiscrepancyBadge(item.discrepancia)}
+                    {getDiscrepancyBadge(item.discrepancia_tipo)}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+
+        <div className="flex justify-between items-center mt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            <ChevronLeft className="w-4 h-4 mr-2" />
+            Anterior
+          </Button>
+          <div className="text-sm text-dark-400">
+            Página {currentPage} de {totalPages}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Próxima
+            <ChevronRight className="w-4 h-4 ml-2" />
+          </Button>
         </div>
       </div>
     </div>

@@ -1,7 +1,8 @@
 project_id = "hvjjcegcdivumprqviug"
+
 [functions.upload_csv]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/upload_csv/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -9,3 +10,23 @@ entrypoint = "./functions/upload_csv/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/upload_csv/*.html" ]
+
+[functions.upload_xlsx]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/upload_xlsx/index.ts"
+
+[functions.process_pdf]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/process_pdf/index.ts"
+
+[functions.upload_discrepancias]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/upload_discrepancias/index.ts"
+
+[functions.analyze_cfop]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/analyze_cfop/index.ts"
