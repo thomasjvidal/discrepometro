@@ -48,11 +48,15 @@ const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
       toast.error("Selecione pelo menos um arquivo para upload.");
       return;
     }
-    // Nova validação: exigir pelo menos um .xlsx
-    const hasExcel = files.some(f => f.name.endsWith('.xlsx'));
+    // Nova validação: exigir pelo menos um arquivo Excel
+    const hasExcel = files.some(f => 
+      f.name.endsWith('.xlsx') || 
+      f.name.endsWith('.xls') || 
+      f.name.endsWith('.xlsb')
+    );
     if (!hasExcel) {
-      toast.error("É obrigatório enviar pelo menos um arquivo Excel (.xlsx).");
-      setError("É obrigatório enviar pelo menos um arquivo Excel (.xlsx).");
+      toast.error("É obrigatório enviar pelo menos um arquivo Excel (.xlsx, .xls ou .xlsb).");
+      setError("É obrigatório enviar pelo menos um arquivo Excel (.xlsx, .xls ou .xlsb).");
       return;
     }
 
@@ -91,7 +95,7 @@ const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
           endpoint = 'process_pdf';
         } else if (file.name.endsWith('.csv')) {
           endpoint = 'upload_csv';
-        } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.xlsb')) {
           endpoint = 'upload_xlsx';
         } else {
           throw new Error(`Formato de arquivo não suportado: ${file.name}`);
@@ -184,7 +188,7 @@ const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
                     <div key={index} className="flex items-center justify-between p-3 bg-dark-800/50 rounded-lg border border-dark-700">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded bg-golden-500/20 flex items-center justify-center">
-                          {file.name.endsWith('.xlsx') ? (
+                          {(file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.xlsb')) ? (
                             <Table className="w-4 h-4 text-golden-400" />
                           ) : file.name.endsWith('.pdf') ? (
                             <FileText className="w-4 h-4 text-red-400" />
@@ -200,7 +204,7 @@ const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
                         </div>
                       </div>
                       <div className="text-xs text-golden-400">
-                        {file.name.endsWith('.xlsx') ? 'Movimentações' : 
+                        {(file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.xlsb')) ? 'Movimentações' : 
                          file.name.endsWith('.pdf') ? 'Inventário' : 'Movimentações'}
                       </div>
                     </div>

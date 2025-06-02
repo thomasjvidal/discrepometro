@@ -13,7 +13,7 @@ interface UploadAreaProps {
 }
 
 function getTipoArquivo(nome: string): string {
-  if (nome.endsWith('.xlsx') || nome.endsWith('.csv')) return 'Movimentações';
+  if (nome.endsWith('.xlsx') || nome.endsWith('.xls') || nome.endsWith('.xlsb') || nome.endsWith('.csv')) return 'Movimentações';
   if (nome.endsWith('.pdf')) return 'Inventário';
   return 'Desconhecido';
 }
@@ -90,8 +90,9 @@ const UploadArea = ({ onFileUpload, isUploading, progress, error }: UploadAreaPr
       'application/pdf': ['.pdf'],
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
       'application/vnd.ms-excel': ['.xls', '.xlsx'],
-      'application/octet-stream': ['.xlsx', '.xls'],
-      'application/zip': ['.xlsx']
+      'application/vnd.ms-excel.sheet.binary.macroEnabled.12': ['.xlsb'],
+      'application/octet-stream': ['.xlsx', '.xls', '.xlsb'],
+      'application/zip': ['.xlsx', '.xlsb']
     },
     multiple: true,
     maxSize: MAX_FILE_SIZE,
@@ -161,7 +162,7 @@ const UploadArea = ({ onFileUpload, isUploading, progress, error }: UploadAreaPr
               {isDragActive ? 'Solte os arquivos aqui' : 'Arraste os arquivos ou clique para selecionar'}
             </h3>
             <p className="text-dark-400">
-                Suporte para CSV, PDF e XLSX • Até 200MB por arquivo
+                Suporte para CSV, PDF, XLSX, XLS e XLSB • Até 200MB por arquivo
             </p>
           </div>
 
@@ -192,7 +193,10 @@ const UploadArea = ({ onFileUpload, isUploading, progress, error }: UploadAreaPr
                       <span className="text-foreground">{file.name}</span>
                       <span className="text-dark-500">({formatFileSize(file.size)})</span>
                       <span className="text-dark-400">
-                        • {file.name.endsWith('.xlsx') ? 'XLSX' : file.name.endsWith('.csv') ? 'CSV' : 'PDF'}
+                        • {file.name.endsWith('.xlsx') ? 'XLSX' : 
+                           file.name.endsWith('.xls') ? 'XLS' :
+                           file.name.endsWith('.xlsb') ? 'XLSB' :
+                           file.name.endsWith('.csv') ? 'CSV' : 'PDF'}
                       </span>
                     </div>
                     <span className={`px-2 py-1 rounded text-xs ${

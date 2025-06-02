@@ -64,70 +64,158 @@ def processar_pdf_robusto(path, inv):
     return produtos_encontrados
 
 def detectar_colunas_excel(df):
-    """Detecta automaticamente as colunas necessárias"""
+    """Detecta automaticamente as colunas necessárias com busca mais robusta"""
     colunas = {}
     
-    for col in df.columns:
-        col_lower = str(col).lower()
-        
-        if 'codigo' in col_lower or 'cod' in col_lower or 'código' in col_lower:
-            colunas['codigo'] = col
-        elif 'produto' in col_lower or 'desc' in col_lower or 'item' in col_lower:
-            colunas['produto'] = col
-        elif 'quantidade' in col_lower or 'qtd' in col_lower or 'quant' in col_lower:
-            colunas['quantidade'] = col
-        elif 'tipo' in col_lower or 'movim' in col_lower or 'operacao' in col_lower:
-            colunas['tipo'] = col
-        elif 'entrada' in col_lower or 'compra' in col_lower:
-            colunas['entradas'] = col
-        elif 'saida' in col_lower or 'venda' in col_lower or 'saída' in col_lower:
-            colunas['saidas'] = col
-        elif 'inicial' in col_lower:
-            colunas['inicial'] = col
-        elif 'final' in col_lower:
-            colunas['final'] = col
+    print(f"🔍 Detectando colunas em {len(df.columns)} colunas disponíveis")
     
-    print(f"🔍 Colunas detectadas: {colunas}")
+    for col in df.columns:
+        col_str = str(col).lower().strip()
+        col_clean = col_str.replace('_', ' ').replace('-', ' ')
+        
+        # Debug: mostrar todas as colunas
+        print(f"   📋 Analisando coluna: '{col}' -> '{col_clean}'")
+        
+        # Detecção de código
+        if not colunas.get('codigo'):
+            if any(termo in col_clean for termo in ['codigo', 'código', 'cod', 'id', 'sku', 'item']):
+                colunas['codigo'] = col
+                print(f"   ✅ Código encontrado: {col}")
+        
+        # Detecção de produto/descrição
+        if not colunas.get('produto'):
+            if any(termo in col_clean for termo in ['produto', 'desc', 'descrição', 'descricao', 'item', 'nome', 'mercadoria']):
+                colunas['produto'] = col
+                print(f"   ✅ Produto encontrado: {col}")
+        
+        # Detecção de quantidade
+        if not colunas.get('quantidade'):
+            if any(termo in col_clean for termo in ['quantidade', 'qtd', 'quant', 'qty', 'estoque']):
+                colunas['quantidade'] = col
+                print(f"   ✅ Quantidade encontrada: {col}")
+        
+        # Detecção de tipo/operação
+        if not colunas.get('tipo'):
+            if any(termo in col_clean for termo in ['tipo', 'operacao', 'operação', 'movim', 'movimento']):
+                colunas['tipo'] = col
+                print(f"   ✅ Tipo encontrado: {col}")
+        
+        # Detecção de entradas
+        if not colunas.get('entradas'):
+            if any(termo in col_clean for termo in ['entrada', 'entradas', 'compra', 'compras', 'input', 'in']):
+                colunas['entradas'] = col
+                print(f"   ✅ Entradas encontrada: {col}")
+        
+        # Detecção de saídas
+        if not colunas.get('saidas'):
+            if any(termo in col_clean for termo in ['saida', 'saidas', 'saída', 'saídas', 'venda', 'vendas', 'output', 'out']):
+                colunas['saidas'] = col
+                print(f"   ✅ Saídas encontrada: {col}")
+        
+        # Detecção de estoque inicial
+        if not colunas.get('inicial'):
+            if any(termo in col_clean for termo in ['inicial', 'inicio', 'início', 'est inicial', 'estoque inicial']):
+                colunas['inicial'] = col
+                print(f"   ✅ Inicial encontrado: {col}")
+        
+        # Detecção de estoque final
+        if not colunas.get('final'):
+            if any(termo in col_clean for termo in ['final', 'fim', 'est final', 'estoque final']):
+                colunas['final'] = col
+                print(f"   ✅ Final encontrado: {col}")
+    
+    print(f"🎯 Mapeamento final: {colunas}")
+    
+    # Se não encontrou código, tentar a primeira coluna como fallback
+    if not colunas.get('codigo') and len(df.columns) > 0:
+        primeira_col = df.columns[0]
+        print(f"⚠️ Usando primeira coluna como código: {primeira_col}")
+        colunas['codigo'] = primeira_col
+        
+    # Se não encontrou produto, tentar a segunda coluna como fallback
+    if not colunas.get('produto') and len(df.columns) > 1:
+        segunda_col = df.columns[1]
+        print(f"⚠️ Usando segunda coluna como produto: {segunda_col}")
+        colunas['produto'] = segunda_col
+    
     return colunas
 
 def processar_xls_robusto(path, txs):
     """Processa Excel com detecção automática de colunas e tratamento de erros"""
     try:
-        # Detectar tipo de arquivo
-        engine = None
-        if path.lower().endswith(".xlsb"):
-            engine = "pyxlsb"
-        elif path.lower().endswith(".csv"):
-            df = pd.read_csv(path)
-        else:
-            df = pd.read_excel(path, engine=engine)
+        print(f"📊 Processando arquivo: {path}")
         
-        if df.empty:
-            print(f"⚠️ Arquivo vazio: {path}")
+        # Detectar tipo de arquivo e usar engine apropriado
+        file_ext = path.lower()
+        df = None
+        
+        if file_ext.endswith(".xlsb"):
+            print(f"🔧 Usando pyxlsb para arquivo binário: {path}")
+            try:
+                df = pd.read_excel(path, engine="pyxlsb")
+                print(f"✅ Arquivo .xlsb lido com sucesso")
+            except Exception as e:
+                print(f"❌ Erro com pyxlsb: {e}")
+                # Tentar com openpyxl como fallback
+                try:
+                    df = pd.read_excel(path, engine="openpyxl")
+                    print(f"✅ Fallback com openpyxl funcionou")
+                except:
+                    raise Exception(f"Não foi possível ler o arquivo .xlsb: {path}")
+                    
+        elif file_ext.endswith(".csv"):
+            # Tentar diferentes encodings para CSV
+            encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+            for encoding in encodings:
+                try:
+                    df = pd.read_csv(path, encoding=encoding)
+                    print(f"✅ CSV lido com encoding: {encoding}")
+                    break
+                except:
+                    continue
+            if df is None:
+                raise Exception(f"Não foi possível ler o CSV com nenhum encoding: {path}")
+                
+        elif file_ext.endswith((".xlsx", ".xls")):
+            # Excel padrão
+            engine = "openpyxl" if file_ext.endswith(".xlsx") else "xlrd"
+            df = pd.read_excel(path, engine=engine)
+            print(f"✅ Excel lido com engine: {engine}")
+        else:
+            raise Exception(f"Formato não suportado: {path}")
+        
+        if df is None or df.empty:
+            print(f"⚠️ Arquivo vazio ou não lido: {path}")
             return 0
             
-        print(f"📊 Excel {path}: {len(df)} linhas, {len(df.columns)} colunas")
+        print(f"📊 {path}: {len(df)} linhas, {len(df.columns)} colunas")
+        print(f"🔍 Primeiras colunas: {list(df.columns[:5])}")
         
         # Detectar colunas automaticamente
         colunas = detectar_colunas_excel(df)
         
         if not colunas.get('codigo'):
             print(f"❌ Coluna 'código' não encontrada em {path}")
+            print(f"📋 Colunas disponíveis: {list(df.columns)}")
             return 0
         
         processados = 0
         
-        for _, r in df.iterrows():
+        print(f"📋 Mapeamento de colunas usado:")
+        for tipo, col in colunas.items():
+            print(f"   • {tipo}: {col}")
+        
+        for idx, r in df.iterrows():
             try:
                 codigo = str(r[colunas['codigo']]).strip()
                 
-                if not codigo or codigo.lower() in ['nan', 'null', '']:
+                if not codigo or codigo.lower() in ['nan', 'null', '', 'none']:
                     continue
                     
                 # Processar diferentes formatos
                 if colunas.get('quantidade'):
                     # Formato simples: código + quantidade + tipo
-                    quantidade = float(r[colunas['quantidade']])
+                    quantidade = float(str(r[colunas['quantidade']]).replace(',', '.'))
                     tipo = str(r.get(colunas.get('tipo', ''), 'ENTRADA')).upper()
                     
                     if codigo not in txs:
@@ -143,8 +231,8 @@ def processar_xls_robusto(path, txs):
                         
                 elif colunas.get('entradas') and colunas.get('saidas'):
                     # Formato completo: entradas e saídas separadas
-                    entradas = float(r.get(colunas['entradas'], 0))
-                    saidas = float(r.get(colunas['saidas'], 0))
+                    entradas = float(str(r.get(colunas['entradas'], 0)).replace(',', '.')) if pd.notna(r.get(colunas['entradas'], 0)) else 0
+                    saidas = float(str(r.get(colunas['saidas'], 0)).replace(',', '.')) if pd.notna(r.get(colunas['saidas'], 0)) else 0
                     
                     if codigo not in txs:
                         txs[codigo] = {'entradas': 0, 'saidas': 0, 'produto': ''}
@@ -157,15 +245,21 @@ def processar_xls_robusto(path, txs):
                 
                 processados += 1
                 
+                # Log dos primeiros 3 registros para debug
+                if processados <= 3:
+                    print(f"   📝 Registro {processados}: {codigo} - {txs[codigo]}")
+                
             except Exception as e:
-                print(f"⚠️ Erro na linha {processados}: {e}")
+                print(f"⚠️ Erro na linha {idx}: {e}")
                 continue
         
-        print(f"✅ Excel {path}: {processados} registros processados")
+        print(f"✅ {path}: {processados} registros processados com sucesso")
         return processados
         
     except Exception as e:
         print(f"❌ Erro ao processar {path}: {e}")
+        import traceback
+        print(f"🔍 Detalhes do erro: {traceback.format_exc()}")
         return 0
 
 def calcular_discrepancias(inv, txs):
