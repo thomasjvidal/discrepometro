@@ -1,34 +1,4 @@
-# Discrepômetro 📊🐍
-
-Sistema inteligente para leitura e análise de planilhas e PDFs fiscais com grande volume de dados. Projetado para identificar discrepâncias contábeis de forma automatizada e visual. Ideal para aplicações fiscais, auditorias e controle de dados.
-
-## 🚀 Tecnologias utilizadas
-
-- **Frontend**: React, TypeScript, Vite, TailwindCSS, Shadcn, React Router
-- **Backend**: Supabase (Functions + Postgres), Node.js (Express)
-- **Visualização**: Recharts
-- **Uploads**: CSV, XLSX, PDF (usando Papaparse, xlsx, pdf-lib)
-- **Formulários**: React Hook Form + Zod
-- **Infraestrutura**: Projeto iniciado via Lovable + Supabase CLI + GitHub
-
-## 📂 Como rodar localmente
-
-```bash
-git clone https://github.com/thomasjvidal/discrepometro.git
-cd discrepometro
-npm install
-supabase start
-npm run dev
-```
-
-⚠️ Crie um arquivo .env com as chaves do Supabase se for usar em produção
-
-## 📁 Estrutura do Projeto
-
-- `src/`: Código React (components, lib, pages)
-- `supabase/`: Funções de upload (CSV, PDF, XLSX)
-- `scripts/`: Scripts em Python para testes com arquivos grandes
-- `.env`: Variáveis de ambiente (excluído do repositório)
+# Welcome to your Lovable project
 
 ## Project info
 

@@ -1,43 +1,118 @@
-import React from 'react';
 
-interface LoadingAnalysisProps {
-  etapa: string;
-  progresso: number;
-  mensagem: string;
-  detalhes?: string;
-}
+import { useState, useEffect } from 'react';
+import { Sparkles, Database, FileText, CheckCircle } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 
-export default function LoadingAnalysis({ etapa, progresso, mensagem, detalhes }: LoadingAnalysisProps) {
+const LoadingAnalysis = () => {
+  const [progress, setProgress] = useState(0);
+  const [currentStep, setCurrentStep] = useState(0);
+
+  const steps = [
+    { label: 'Processando CSV', description: 'Lendo movimentações e CFOPs', icon: Database },
+    { label: 'Analisando PDFs', description: 'Extraindo dados dos inventários', icon: FileText },
+    { label: 'Detectando Discrepâncias', description: 'Comparando estoques e movimentações', icon: Sparkles },
+    { label: 'Finalizando', description: 'Preparando relatório detalhado', icon: CheckCircle }
+  ];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setProgress(prev => {
+        const newProgress = prev + 1;
+        
+        // Update step based on progress
+        if (newProgress <= 25) setCurrentStep(0);
+        else if (newProgress <= 50) setCurrentStep(1);
+        else if (newProgress <= 75) setCurrentStep(2);
+        else setCurrentStep(3);
+        
+        return newProgress > 100 ? 100 : newProgress;
+      });
+    }, 30);
+
+    return () => clearInterval(timer);
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center p-6">
-      <div className="bg-gray-800 rounded-lg p-8 max-w-md w-full shadow-2xl">
-        <div className="text-center space-y-6">
-          <div className="flex justify-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400"></div>
-          </div>
-          
-          <div>
-            <h2 className="text-xl font-bold text-white mb-2">Processando Análise</h2>
-            <p className="text-gray-300 text-sm">{mensagem}</p>
-            {detalhes && (
-              <p className="text-gray-400 text-xs mt-1">{detalhes}</p>
-            )}
-          </div>
-          
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm text-gray-300">
-              <span>{etapa}</span>
-              <span>{progresso}%</span>
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="w-full max-w-2xl mx-auto">
+        <Card className="glass-effect p-8 text-center">
+          <div className="space-y-8">
+            {/* Header */}
+            <div className="space-y-4">
+              <div className="mx-auto w-20 h-20 rounded-3xl bg-gradient-to-br from-golden-400 to-golden-600 flex items-center justify-center animate-pulse-golden">
+                <Sparkles className="w-10 h-10 text-dark-900" />
+              </div>
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-golden-400 to-golden-600 bg-clip-text text-transparent">
+                Analisando Arquivos
+              </h2>
+              <p className="text-dark-400">
+                Processando dados e identificando discrepâncias...
+              </p>
             </div>
-            <div className="w-full bg-gray-700 rounded-full h-2">
-              <div 
-                className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${progresso}%` }}
-              ></div>
+
+            {/* Progress */}
+            <div className="space-y-4">
+              <Progress value={progress} className="h-3 bg-dark-800" />
+              <div className="text-2xl font-bold text-golden-400">
+                {progress}%
+              </div>
+            </div>
+
+            {/* Steps */}
+            <div className="space-y-4">
+              {steps.map((step, index) => {
+                const Icon = step.icon;
+                const isActive = index === currentStep;
+                const isCompleted = index < currentStep;
+                
+                return (
+                  <div
+                    key={index}
+                    className={`
+                      flex items-center gap-4 p-4 rounded-xl transition-all duration-500
+                      ${isActive 
+                        ? 'bg-golden-500/20 border border-golden-500/30' 
+                        : isCompleted 
+                        ? 'bg-green-500/10 border border-green-500/20' 
+                        : 'bg-dark-800/30 border border-dark-700/50'
+                      }
+                    `}
+                  >
+                    <div className={`
+                      w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-500
+                      ${isActive 
+                        ? 'bg-golden-500 text-dark-900 golden-glow' 
+                        : isCompleted 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-dark-700 text-dark-400'
+                      }
+                    `}>
+                      <Icon className="w-6 h-6" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className={`
+                        font-semibold transition-colors duration-500
+                        ${isActive || isCompleted ? 'text-foreground' : 'text-dark-500'}
+                      `}>
+                        {step.label}
+                      </h3>
+                      <p className={`
+                        text-sm transition-colors duration-500
+                        ${isActive ? 'text-golden-300' : isCompleted ? 'text-green-300' : 'text-dark-600'}
+                      `}>
+                        {step.description}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );
-}
+};
+
+export default LoadingAnalysis;

@@ -3,32 +3,30 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import MainFlow from "./pages/MainFlow";
+import Upload from "./pages/Upload";
+import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
-
-console.log('App.tsx: Iniciando renderização');
+import DiscrepometroFiscal from "./pages/DiscrepometroFiscal";
 
 const queryClient = new QueryClient();
 
-const App = () => {
-  console.log('App.tsx: Renderizando componente');
-  
-  return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <div className="min-h-screen bg-gradient-to-br from-dark-950 via-dark-900 to-dark-950">
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<MainFlow />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </div>
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
-};
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <div className="min-h-screen bg-gradient-to-br from-dark-950 via-dark-900 to-dark-950">
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Upload />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/discrepometro" element={<DiscrepometroFiscal />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </div>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
 export default App;

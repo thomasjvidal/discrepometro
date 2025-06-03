@@ -1,262 +1,253 @@
-import React, { useState, useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+
+import { useState } from 'react';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertTriangle, FileText, TrendingUp, Search, Filter, Database } from 'lucide-react';
-import { useAnaliseDiscrepancia, type Discrepancia } from '@/hooks/useAnaliseDiscrepancia';
+import { RefreshCw, Search } from 'lucide-react';
+import { useAnaliseDiscrepancia } from '@/hooks/useAnaliseDiscrepancia';
 
-export default function DiscrepometroVisual() {
-  const { discrepancias, carregando, erro, carregarDados, carregarDadosSupabase } = useAnaliseDiscrepancia();
-  
-  // Estados para filtros
-  const [filtroTipo, setFiltroTipo] = useState<string>('todos');
-  const [filtroTexto, setFiltroTexto] = useState<string>('');
+const DiscrepometroVisual = () => {
+  const { data, loading, error, refetch } = useAnaliseDiscrepancia();
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // Carregar dados na inicialização
-  React.useEffect(() => {
-    carregarDadosSupabase(); // Tenta carregar do Supabase primeiro
-  }, [carregarDadosSupabase]);
+  const filteredData = data.filter(item =>
+    item.produto.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  // Filtrar dados com tipagem segura
-  const dadosFiltrados = useMemo(() => {
-    return discrepancias.filter((item: Discrepancia) => {
-      // Verificar se produto é string antes de usar toLowerCase e includes
-      const produtoValido = typeof item.produto === 'string' ? item.produto : '';
-      const codigoValido = typeof item.codigo === 'string' ? item.codigo : '';
-      
-      const matchTipo = filtroTipo === 'todos' || 
-        (item.discrepancia_tipo && item.discrepancia_tipo === filtroTipo);
-      
-      const matchTexto = filtroTexto === '' || 
-        produtoValido.toLowerCase().includes(filtroTexto.toLowerCase()) ||
-        codigoValido.toLowerCase().includes(filtroTexto.toLowerCase());
-      
-      return matchTipo && matchTexto;
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
-  }, [discrepancias, filtroTipo, filtroTexto]);
+  };
 
-  // Estatísticas
-  const estatisticas = useMemo(() => {
-    const total = discrepancias.length;
-    const comDiscrepancia = discrepancias.filter(d => 
-      d.discrepancia_tipo && d.discrepancia_tipo !== 'Sem Discrepância'
-    ).length;
-    const valorTotal = discrepancias.reduce((sum, d) => sum + (d.valor_total || 0), 0);
+  // Análise de CFOPs por produto
+  const analyzeProduct = (produto: string) => {
+    const productCfops = data.filter(item => item.produto === produto);
+    const cfops = productCfops.map(item => item.cfop);
+    const uniqueCfops = [...new Set(cfops)];
+
+    // Verifica se tem mais de 1 CFOP
+    const hasMultipleCfops = uniqueCfops.length > 1;
+
+    // Verifica se tem CFOPs de entrada E saída (ex: 1102 e 5102)
+    const hasEntryAndExit = uniqueCfops.some(cfop => cfop.startsWith('1') || cfop.startsWith('2')) &&
+                           uniqueCfops.some(cfop => cfop.startsWith('5') || cfop.startsWith('6'));
+
+    return { hasMultipleCfops, hasEntryAndExit, cfopCount: uniqueCfops.length };
+  };
+
+  const getRowStyles = (produto: string) => {
+    const analysis = analyzeProduct(produto);
     
-    return {
-      total,
-      comDiscrepancia,
-      percentualComDiscrepancia: total > 0 ? (comDiscrepancia / total) * 100 : 0,
-      valorTotal
-    };
-  }, [discrepancias]);
-
-  const getBadgeVariant = (tipo: string): "default" | "secondary" | "destructive" | "outline" => {
-    switch (tipo) {
-      case 'Sem Discrepância': return 'outline';
-      case 'Estoque Excedente': return 'default';
-      case 'Estoque Faltante': return 'destructive';
-      case 'Divergência Física/Contábil': return 'secondary';
-      default: return 'outline';
+    if (analysis.hasEntryAndExit) {
+      return 'bg-red-50 hover:bg-red-100 border-l-4 border-red-400';
+    } else if (analysis.hasMultipleCfops) {
+      return 'bg-yellow-50 hover:bg-yellow-100 border-l-4 border-yellow-400';
     }
+    
+    return 'bg-white hover:bg-gray-50';
   };
 
-  const formatarMoeda = (valor: number): string => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(valor);
+  const getStatusIcon = (produto: string) => {
+    const analysis = analyzeProduct(produto);
+    
+    if (analysis.hasEntryAndExit) {
+      return '🔴';
+    } else if (analysis.hasMultipleCfops) {
+      return '🟡';
+    }
+    
+    return '🟢';
   };
 
-  const formatarData = (dataString: string): string => {
-    return new Date(dataString).toLocaleDateString('pt-BR');
+  const getStatusText = (produto: string) => {
+    const analysis = analyzeProduct(produto);
+    
+    if (analysis.hasEntryAndExit) {
+      return 'Potencial Erro';
+    } else if (analysis.hasMultipleCfops) {
+      return 'Atenção';
+    }
+    
+    return 'OK';
   };
 
-  // Tela de carregamento
-  if (carregando) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando análise de discrepâncias...</p>
+      <Card className="p-8 bg-white/80 backdrop-blur-sm border border-gray-200/50 shadow-lg">
+        <div className="flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <span className="ml-3 text-gray-600 font-medium">Carregando análise fiscal...</span>
         </div>
-      </div>
+      </Card>
     );
   }
 
-  // Tela de erro
-  if (erro) {
+  if (error) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Erro ao carregar dados</h3>
-          <p className="text-gray-600 mb-4">{erro}</p>
-          <div className="flex gap-2 justify-center">
-            <Button onClick={carregarDadosSupabase}>
-              <Database className="h-4 w-4 mr-2" />
-              Tentar Supabase
-            </Button>
-            <Button onClick={carregarDados} variant="outline">
-              Dados Demo
-            </Button>
-          </div>
+      <Card className="p-8 bg-white/80 backdrop-blur-sm border border-red-200/50 shadow-lg">
+        <div className="text-center space-y-4">
+          <div className="text-red-600 text-lg font-semibold">Erro ao carregar dados</div>
+          <div className="text-gray-500">{error}</div>
+          <Button onClick={refetch} variant="outline" size="sm" className="bg-white hover:bg-gray-50">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Tentar novamente
+          </Button>
         </div>
-      </div>
+      </Card>
     );
   }
+
+  // Agrupar dados por produto para evitar duplicatas visuais
+  const groupedData = filteredData.reduce((acc, item) => {
+    const existing = acc.find(group => group.produto === item.produto);
+    if (existing) {
+      existing.cfops.push(item.cfop);
+      existing.items.push(item);
+    } else {
+      acc.push({
+        produto: item.produto,
+        codigo: item.codigo,
+        cfops: [item.cfop],
+        items: [item],
+        latestDate: item.created_at
+      });
+    }
+    return acc;
+  }, [] as { produto: string; codigo: string; cfops: string[]; items: any[]; latestDate: string }[]);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Análise de Discrepâncias</h2>
-          <p className="text-gray-600 mt-1">
-            {discrepancias.length} produtos analisados • {estatisticas.comDiscrepancia} com discrepâncias
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={carregarDadosSupabase} variant="outline">
-            <Database className="h-4 w-4 mr-2" />
-            Supabase
-          </Button>
-          <Button onClick={carregarDados} variant="outline">
-            <TrendingUp className="h-4 w-4 mr-2" />
-            Demo
-          </Button>
-        </div>
-      </div>
-
-      {/* Cards de estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Produtos</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{estatisticas.total}</div>
-            <p className="text-xs text-muted-foreground">produtos analisados</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Com Discrepâncias</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{estatisticas.comDiscrepancia}</div>
-            <p className="text-xs text-muted-foreground">
-              {estatisticas.percentualComDiscrepancia.toFixed(1)}% do total
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Valor Total</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatarMoeda(estatisticas.valorTotal)}</div>
-            <p className="text-xs text-muted-foreground">valor movimentado</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filtros */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filtros
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <Input
-                placeholder="Buscar por produto ou código..."
-                value={filtroTexto}
-                onChange={(e) => setFiltroTexto(e.target.value)}
-                className="w-full"
-              />
-            </div>
-            <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os tipos</SelectItem>
-                <SelectItem value="Sem Discrepância">Sem Discrepância</SelectItem>
-                <SelectItem value="Estoque Excedente">Estoque Excedente</SelectItem>
-                <SelectItem value="Estoque Faltante">Estoque Faltante</SelectItem>
-                <SelectItem value="Divergência Física/Contábil">Divergência Física/Contábil</SelectItem>
-              </SelectContent>
-            </Select>
+      {/* Header com busca e botão atualizar */}
+      <Card className="p-6 bg-white/90 backdrop-blur-md border border-gray-200/50 shadow-xl">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Input
+              placeholder="Buscar produto..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-12 h-12 border-gray-300/50 focus:border-blue-500 focus:ring-blue-500/20 bg-white/70 backdrop-blur-sm text-gray-900 placeholder-gray-500 rounded-xl"
+            />
           </div>
-        </CardContent>
+          
+          <div className="flex items-center gap-6">
+            <div className="text-sm text-gray-600 font-medium">
+              {groupedData.length} produtos • {filteredData.length} registros
+            </div>
+            <Button 
+              onClick={refetch} 
+              variant="outline" 
+              size="sm" 
+              className="bg-white/80 hover:bg-white border-gray-300/50 text-gray-700 h-12 px-6 rounded-xl shadow-sm backdrop-blur-sm"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Atualizar dados
+            </Button>
+          </div>
+        </div>
       </Card>
 
       {/* Tabela de dados */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Resultados da Análise</CardTitle>
-          <CardDescription>
-            {dadosFiltrados.length} de {discrepancias.length} produtos mostrados
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Produto</TableHead>
-                <TableHead>Código</TableHead>
-                <TableHead>CFOP</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Diferença</TableHead>
-                <TableHead>Valor</TableHead>
-                <TableHead>Data</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {dadosFiltrados.map((item: Discrepancia) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">
-                    {typeof item.produto === 'string' ? item.produto : 'N/A'}
-                  </TableCell>
-                  <TableCell>{item.codigo}</TableCell>
-                  <TableCell>{item.cfop}</TableCell>
-                  <TableCell>
-                    <Badge variant={getBadgeVariant(item.discrepancia_tipo || '')}>
-                      {item.discrepancia_tipo || 'N/A'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {item.discrepancia_valor !== undefined ? `${item.discrepancia_valor} un` : 'N/A'}
-                  </TableCell>
-                  <TableCell>
-                    {item.valor_total !== undefined ? formatarMoeda(item.valor_total) : 'N/A'}
-                  </TableCell>
-                  <TableCell>{formatarData(item.created_at)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          
-          {dadosFiltrados.length === 0 && (
-            <div className="text-center py-8">
-              <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">Nenhum resultado encontrado para os filtros aplicados</p>
+      <Card className="overflow-hidden bg-white/90 backdrop-blur-md border border-gray-200/50 shadow-xl rounded-2xl">
+        {groupedData.length === 0 ? (
+          <div className="p-16 text-center">
+            <div className="text-gray-500 text-xl font-medium mb-2">
+              {searchTerm ? 'Nenhum produto encontrado' : 'Nenhuma análise disponível'}
             </div>
-          )}
-        </CardContent>
+            <div className="text-gray-400 text-sm">
+              {searchTerm ? 'Tente ajustar o termo de busca' : 'Os dados aparecerão aqui após o processamento'}
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200/50">
+                  <th className="text-left p-6 font-semibold text-gray-800 text-sm uppercase tracking-wide">Produto</th>
+                  <th className="text-left p-6 font-semibold text-gray-800 text-sm uppercase tracking-wide">Código</th>
+                  <th className="text-left p-6 font-semibold text-gray-800 text-sm uppercase tracking-wide">CFOPs</th>
+                  <th className="text-left p-6 font-semibold text-gray-800 text-sm uppercase tracking-wide">Última Atualização</th>
+                  <th className="text-center p-6 font-semibold text-gray-800 text-sm uppercase tracking-wide">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groupedData.map((group, index) => (
+                  <tr
+                    key={`${group.produto}-${index}`}
+                    className={`
+                      border-b border-gray-100/50 transition-all duration-200 hover:shadow-sm
+                      ${getRowStyles(group.produto)}
+                    `}
+                  >
+                    <td className="p-6">
+                      <div className="font-semibold text-gray-900 text-base">{group.produto}</div>
+                    </td>
+                    <td className="p-6">
+                      <div className="font-mono text-sm text-gray-600 bg-gray-100/50 px-3 py-1 rounded-lg inline-block">
+                        {group.codigo}
+                      </div>
+                    </td>
+                    <td className="p-6">
+                      <div className="flex flex-wrap gap-2">
+                        {[...new Set(group.cfops)].map((cfop, i) => (
+                          <span
+                            key={i}
+                            className="inline-block bg-blue-100/70 text-blue-800 text-xs font-medium px-3 py-1 rounded-full border border-blue-200/50"
+                          >
+                            {cfop}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="p-6">
+                      <div className="text-sm text-gray-600">
+                        {formatDate(group.latestDate)}
+                      </div>
+                    </td>
+                    <td className="p-6 text-center">
+                      <div className="flex items-center justify-center gap-3">
+                        <span className="text-xl">{getStatusIcon(group.produto)}</span>
+                        <span className={`text-sm font-semibold px-3 py-1 rounded-full ${
+                          getStatusText(group.produto) === 'Potencial Erro' ? 'bg-red-100 text-red-700' :
+                          getStatusText(group.produto) === 'Atenção' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-green-100 text-green-700'
+                        }`}>
+                          {getStatusText(group.produto)}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Legenda */}
+      <Card className="p-6 bg-white/80 backdrop-blur-md border border-gray-200/50 shadow-lg">
+        <div className="flex flex-wrap gap-6 items-center justify-center text-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-green-100 border border-green-200 rounded"></div>
+            <span className="text-gray-600">🟢 Normal - CFOP único</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-yellow-100 border border-yellow-200 rounded"></div>
+            <span className="text-gray-600">🟡 Atenção - Múltiplos CFOPs</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-red-100 border border-red-200 rounded"></div>
+            <span className="text-gray-600">🔴 Potencial Erro - CFOPs entrada + saída</span>
+          </div>
+        </div>
       </Card>
     </div>
   );
-} 
+};
+
+export default DiscrepometroVisual;

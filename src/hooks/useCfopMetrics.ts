@@ -1,29 +1,26 @@
 
 import { useState, useEffect } from 'react';
 
-interface AnaliseDiscrepancia {
+interface CfopMetric {
   id: string;
-  produto: string;
   cfop: string;
-  codigo: string;
+  valor: number;
+  user_id: string;
   created_at: string;
-  user_id?: string;
-  discrepancia_tipo?: string;
-  observacoes?: string;
 }
 
-export const useAnaliseDiscrepancia = () => {
-  const [data, setData] = useState<AnaliseDiscrepancia[]>([]);
+export const useCfopMetrics = () => {
+  const [data, setData] = useState<CfopMetric[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchAnaliseDiscrepancia = async () => {
+  const fetchCfopMetrics = async () => {
     try {
       setLoading(true);
       setError(null);
 
       const response = await fetch(
-        'https://hvjjcegcdivumprqviug.supabase.co/rest/v1/analise_discrepancia?order=created_at.desc',
+        'https://hvjjcegcdivumprqviug.supabase.co/rest/v1/cfop_metrics?order=created_at.desc',
         {
           method: 'GET',
           headers: {
@@ -42,20 +39,20 @@ export const useAnaliseDiscrepancia = () => {
       setData(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
-      console.error('Erro ao buscar análise de discrepância:', err);
+      console.error('Erro ao buscar dados de CFOP:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchAnaliseDiscrepancia();
+    fetchCfopMetrics();
   }, []);
 
   return {
     data,
     loading,
     error,
-    refetch: fetchAnaliseDiscrepancia
+    refetch: fetchCfopMetrics
   };
 };

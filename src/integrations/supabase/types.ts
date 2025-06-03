@@ -11,72 +11,63 @@ export type Database = {
     Tables: {
       analise_discrepancia: {
         Row: {
-          chunk_id: number | null
-          codigo_produto: string | null
+          ano: number | null
+          cfop: string | null
+          codigo: string
           created_at: string
-          empresa_id: string | null
-          estoque_final_2021: number
-          estoque_inicial_2021: number
-          fonte: string | null
-          id: string
-          job_id: string | null
-          linha_origem: number | null
+          discrepancia_tipo: string | null
+          discrepancia_valor: number | null
+          entradas: number | null
+          est_calculado: number | null
+          est_final: number | null
+          est_inicial: number | null
+          id: number
+          observacoes: string | null
           produto: string
-          tipo_discrepancia: string | null
-          total_entradas: number
-          total_saidas: number
-          updated_at: string
+          saidas: number | null
+          user_id: string | null
+          valor_total: number | null
+          valor_unitario: number | null
         }
         Insert: {
-          chunk_id?: number | null
-          codigo_produto?: string | null
+          ano?: number | null
+          cfop?: string | null
+          codigo: string
           created_at?: string
-          empresa_id?: string | null
-          estoque_final_2021?: number
-          estoque_inicial_2021?: number
-          fonte?: string | null
-          id?: string
-          job_id?: string | null
-          linha_origem?: number | null
+          discrepancia_tipo?: string | null
+          discrepancia_valor?: number | null
+          entradas?: number | null
+          est_calculado?: number | null
+          est_final?: number | null
+          est_inicial?: number | null
+          id?: number
+          observacoes?: string | null
           produto: string
-          tipo_discrepancia?: string | null
-          total_entradas?: number
-          total_saidas?: number
-          updated_at?: string
+          saidas?: number | null
+          user_id?: string | null
+          valor_total?: number | null
+          valor_unitario?: number | null
         }
         Update: {
-          chunk_id?: number | null
-          codigo_produto?: string | null
+          ano?: number | null
+          cfop?: string | null
+          codigo?: string
           created_at?: string
-          empresa_id?: string | null
-          estoque_final_2021?: number
-          estoque_inicial_2021?: number
-          fonte?: string | null
-          id?: string
-          job_id?: string | null
-          linha_origem?: number | null
+          discrepancia_tipo?: string | null
+          discrepancia_valor?: number | null
+          entradas?: number | null
+          est_calculado?: number | null
+          est_final?: number | null
+          est_inicial?: number | null
+          id?: number
+          observacoes?: string | null
           produto?: string
-          tipo_discrepancia?: string | null
-          total_entradas?: number
-          total_saidas?: number
-          updated_at?: string
+          saidas?: number | null
+          user_id?: string | null
+          valor_total?: number | null
+          valor_unitario?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "analise_discrepancia_empresa_id_fkey"
-            columns: ["empresa_id"]
-            isOneToOne: false
-            referencedRelation: "empresas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "analise_discrepancia_job_id_fkey"
-            columns: ["job_id"]
-            isOneToOne: false
-            referencedRelation: "processing_jobs"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       cfop_metrics: {
         Row: {
@@ -249,6 +240,36 @@ export type Database = {
           },
         ]
       }
+      inventory_products: {
+        Row: {
+          created_at: string | null
+          id: string
+          page_number: number | null
+          product_code: string | null
+          product_name: string
+          quantity: number
+          year: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          page_number?: number | null
+          product_code?: string | null
+          product_name: string
+          quantity: number
+          year: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          page_number?: number | null
+          product_code?: string | null
+          product_name?: string
+          quantity?: number
+          year?: number
+        }
+        Relationships: []
+      }
       processing_jobs: {
         Row: {
           completed_at: string | null
@@ -349,6 +370,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      transactions: {
+        Row: {
+          cfop: string
+          created_at: string | null
+          date: string
+          id: string
+          product_name: string
+          quantity: number
+          transaction_type: string
+        }
+        Insert: {
+          cfop: string
+          created_at?: string | null
+          date: string
+          id?: string
+          product_name: string
+          quantity: number
+          transaction_type: string
+        }
+        Update: {
+          cfop?: string
+          created_at?: string | null
+          date?: string
+          id?: string
+          product_name?: string
+          quantity?: number
+          transaction_type?: string
+        }
+        Relationships: []
+      }
+      uploads: {
+        Row: {
+          file_size: number | null
+          file_type: string
+          filename: string
+          id: string
+          processed: boolean | null
+          upload_date: string | null
+          year: number | null
+        }
+        Insert: {
+          file_size?: number | null
+          file_type: string
+          filename: string
+          id?: string
+          processed?: boolean | null
+          upload_date?: string | null
+          year?: number | null
+        }
+        Update: {
+          file_size?: number | null
+          file_type?: string
+          filename?: string
+          id?: string
+          processed?: boolean | null
+          upload_date?: string | null
+          year?: number | null
+        }
+        Relationships: []
       }
     }
     Views: {
