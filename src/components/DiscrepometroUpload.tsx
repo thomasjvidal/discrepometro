@@ -18,13 +18,72 @@ interface DiscrepometroUploadProps {
   onFilesUploaded?: (files: File[]) => void;
 }
 
+// Função para detectar tipo de arquivo de forma ULTRA SIMPLES
+const detectFileType = (file: File): 'excel' | 'pdf' | 'csv' | 'unknown' => {
+  const fileName = file.name.toLowerCase();
+  
+  console.log(`🔍 DETECÇÃO ULTRA SIMPLES para: ${file.name}`);
+  console.log(`   - Nome lowercase: ${fileName}`);
+  console.log(`   - Contém .xlsx: ${fileName.indexOf('.xlsx') > -1}`);
+  console.log(`   - Contém .xls: ${fileName.indexOf('.xls') > -1}`);
+  console.log(`   - Contém .pdf: ${fileName.indexOf('.pdf') > -1}`);
+  
+  // TESTE DIRETO - forçar Excel se contém .xlsx
+  if (fileName.indexOf('.xlsx') > -1) {
+    console.log(`   ✅ FORÇANDO EXCEL por .xlsx`);
+    return 'excel';
+  }
+  
+  if (fileName.indexOf('.xls') > -1) {
+    console.log(`   ✅ FORÇANDO EXCEL por .xls`);
+    return 'excel';
+  }
+  
+  if (fileName.indexOf('.xlsb') > -1) {
+    console.log(`   ✅ FORÇANDO EXCEL por .xlsb`);
+    return 'excel';
+  }
+  
+  if (fileName.indexOf('.csv') > -1) {
+    console.log(`   ✅ FORÇANDO CSV por .csv`);
+    return 'csv';
+  }
+  
+  if (fileName.indexOf('.pdf') > -1) {
+    console.log(`   ✅ FORÇANDO PDF por .pdf`);
+    return 'pdf';
+  }
+  
+  console.log(`   ❌ Tipo não reconhecido para: ${fileName}`);
+  return 'unknown';
+};
+
+// Função para obter ícone baseado no tipo detectado
+const getFileIcon = (file: File) => {
+  const fileType = detectFileType(file);
+  
+  console.log(`🎨 Obtendo ícone para ${file.name} - tipo detectado: ${fileType}`);
+  
+  switch (fileType) {
+    case 'excel':
+      return { icon: Table, color: 'text-golden-400', label: 'Distribuição' };
+    case 'pdf':
+      return { icon: FileText, color: 'text-red-400', label: 'Inventário' };
+    case 'csv':
+      return { icon: Database, color: 'text-blue-400', label: 'Distribuição' };
+    default:
+      return { icon: FileText, color: 'text-gray-400', label: 'Desconhecido' };
+  }
+};
+
 const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
   const navigate = useNavigate();
   const [files, setFiles] = useState<File[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [forceUpdate, setForceUpdate] = useState(0); // Forçar re-render
 
   // Limpar qualquer cache quando o componente monta
   useEffect(() => {
@@ -38,9 +97,41 @@ const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
 
   const handleFileUpload = (newFiles: File[]) => {
     console.log('🔥 handleFileUpload chamado com:', newFiles.map(f => ({name: f.name, size: f.size, type: f.type})));
-    setFiles(newFiles);
+    
+    // TESTE DIRETO - verificar cada arquivo
+    newFiles.forEach(file => {
+      console.log(`🧪 TESTE DIRETO para ${file.name}:`);
+      console.log(`   - Nome original: ${file.name}`);
+      console.log(`   - Nome lowercase: ${file.name.toLowerCase()}`);
+      console.log(`   - Inclui .xlsx: ${file.name.toLowerCase().includes('.xlsx')}`);
+      console.log(`   - Inclui .xls: ${file.name.toLowerCase().includes('.xls')}`);
+      console.log(`   - Tipo detectado: ${detectFileType(file)}`);
+    });
+    
+    // Validar tipos de arquivo
+    const validFiles = newFiles.filter(file => {
+      const fileType = detectFileType(file);
+      const isValid = fileType !== 'unknown';
+      
+      if (!isValid) {
+        console.warn('⚠️ Arquivo não suportado:', file.name);
+        toast.error(`Arquivo não suportado: ${file.name}`);
+      } else {
+        console.log(`✅ Arquivo válido: ${file.name} (${fileType})`);
+      }
+      
+      return isValid;
+    });
+    
+    console.log('🔥 Definindo arquivos:', validFiles.map(f => f.name));
+    setFiles(validFiles);
     setError(null);
-    console.log('🔥 Estado dos arquivos atualizado para:', newFiles.map(f => f.name));
+    
+    // Forçar re-render
+    setTimeout(() => {
+      console.log('🔄 Forçando re-render da interface');
+      setForceUpdate(prev => prev + 1);
+    }, 100);
   };
 
   const handleUpload = async () => {
@@ -48,15 +139,26 @@ const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
       toast.error("Selecione pelo menos um arquivo para upload.");
       return;
     }
-    // Nova validação: exigir pelo menos um arquivo Excel
-    const hasExcel = files.some(f => 
-      f.name.endsWith('.xlsx') || 
-      f.name.endsWith('.xls') || 
-      f.name.endsWith('.xlsb')
-    );
-    if (!hasExcel) {
-      toast.error("É obrigatório enviar pelo menos um arquivo Excel (.xlsx, .xls ou .xlsb).");
-      setError("É obrigatório enviar pelo menos um arquivo Excel (.xlsx, .xls ou .xlsb).");
+
+    // Validar arquivos mínimos para discrepômetro
+    const pdfs = files.filter(f => detectFileType(f) === 'pdf');
+    const excels = files.filter(f => detectFileType(f) === 'excel' || detectFileType(f) === 'csv');
+    
+    console.log(`📁 Validação: ${pdfs.length} PDFs, ${excels.length} Excel/CSV`);
+    console.log('📄 PDFs:', pdfs.map(f => f.name));
+    console.log('📊 Excel/CSV:', excels.map(f => f.name));
+    
+    if (pdfs.length < 2) {
+      const errorMsg = "São necessários pelo menos 2 PDFs (inventário físico e contábil)";
+      toast.error(errorMsg);
+      setError(errorMsg);
+      return;
+    }
+    
+    if (excels.length < 1) {
+      const errorMsg = "É necessário pelo menos 1 arquivo Excel/CSV com distribuição (emitente/destinatário)";
+      toast.error(errorMsg);
+      setError(errorMsg);
       return;
     }
 
@@ -70,12 +172,12 @@ const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
     try {
       // Se tem callback, chama ele ao invés de processar no backend
       if (onFilesUploaded) {
-        // Simular progresso
-        for (let i = 0; i <= 100; i += 25) {
-          setProgress(i);
-          setCurrentStep(Math.floor(i / 25));
+        console.log('🚀 Usando processador real com callback');
+        
+        // Simular progresso inicial
+        setProgress(10);
+        setCurrentStep(0);
           await new Promise(resolve => setTimeout(resolve, 500));
-        }
         
         toast.success("Arquivos carregados com sucesso!", { id: toastId });
         onFilesUploaded(files);
@@ -91,11 +193,15 @@ const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
         formData.append('ano', '2024'); // TODO: Permitir seleção do ano
 
         let endpoint = '';
-        if (file.name.endsWith('.pdf')) {
+        const fileType = detectFileType(file);
+        
+        console.log(`📤 Processando arquivo: ${file.name} (tipo: ${fileType})`);
+        
+        if (fileType === 'pdf') {
           endpoint = 'process_pdf';
-        } else if (file.name.endsWith('.csv')) {
+        } else if (fileType === 'csv') {
           endpoint = 'upload_csv';
-        } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.xlsb')) {
+        } else if (fileType === 'excel') {
           endpoint = 'upload_xlsx';
         } else {
           throw new Error(`Formato de arquivo não suportado: ${file.name}`);
@@ -142,8 +248,11 @@ const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-semibold text-foreground">Upload de Arquivos</h2>
               <p className="text-dark-400">
-                Faça upload dos arquivos para análise
+                Faça upload dos arquivos para análise de discrepâncias fiscais
               </p>
+              <div className="text-sm text-dark-500">
+                <strong>Requisitos:</strong> 2 PDFs (inventário físico + contábil) + 1+ Excel/CSV (distribuição emitente/destinatário)
+              </div>
             </div>
             <UploadArea 
               onFileUpload={handleFileUpload} 
@@ -182,33 +291,70 @@ const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
             {/* Arquivos Carregados */}
             {files.length > 0 && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-foreground">Arquivos Carregados</h3>
+                <h3 className="text-lg font-semibold text-foreground">Arquivos Carregados ({files.length})</h3>
                 <div className="space-y-2">
-                  {files.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-dark-800/50 rounded-lg border border-dark-700">
+                  {files.map((file, index) => {
+                    // SOLUÇÃO FORÇADA - detectar diretamente pelo nome
+                    const fileName = file.name.toLowerCase();
+                    const isExcelFile = fileName.includes('.xlsx') || fileName.includes('.xls') || fileName.includes('.xlsb');
+                    const isPdfFile = fileName.includes('.pdf');
+                    const isCsvFile = fileName.includes('.csv');
+                    
+                    // Forçar tipo baseado na extensão
+                    let forcedType = 'unknown';
+                    let forcedLabel = 'Desconhecido';
+                    let forcedIcon = FileText;
+                    let forcedColor = 'text-gray-400';
+                    
+                    if (isExcelFile) {
+                      forcedType = 'EXCEL';
+                      forcedLabel = 'Distribuição';
+                      forcedIcon = Table;
+                      forcedColor = 'text-golden-400';
+                    } else if (isPdfFile) {
+                      forcedType = 'PDF';
+                      forcedLabel = 'Inventário';
+                      forcedIcon = FileText;
+                      forcedColor = 'text-red-400';
+                    } else if (isCsvFile) {
+                      forcedType = 'CSV';
+                      forcedLabel = 'Distribuição';
+                      forcedIcon = Database;
+                      forcedColor = 'text-blue-400';
+                    }
+                    
+                    const Icon = forcedIcon;
+                    
+                    console.log(`🎯 SOLUÇÃO FORÇADA para ${file.name}:`);
+                    console.log(`   - Nome: ${fileName}`);
+                    console.log(`   - É Excel? ${isExcelFile}`);
+                    console.log(`   - É PDF? ${isPdfFile}`);
+                    console.log(`   - Tipo forçado: ${forcedType}`);
+                    console.log(`   - Label forçado: ${forcedLabel}`);
+                    
+                    return (
+                      <div key={`${index}-${forceUpdate}-${file.name}`} className="flex items-center justify-between p-3 bg-dark-800/50 rounded-lg border border-dark-700">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded bg-golden-500/20 flex items-center justify-center">
-                          {(file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.xlsb')) ? (
+                            {isExcelFile ? (
                             <Table className="w-4 h-4 text-golden-400" />
-                          ) : file.name.endsWith('.pdf') ? (
-                            <FileText className="w-4 h-4 text-red-400" />
                           ) : (
-                            <Database className="w-4 h-4 text-blue-400" />
+                              <Icon className={`w-4 h-4 ${forcedColor}`} />
                           )}
                         </div>
                         <div>
                           <p className="text-sm font-medium text-foreground">{file.name}</p>
                           <p className="text-xs text-dark-400">
-                            {(file.size / 1024 / 1024).toFixed(2)} MB • {file.type || 'Unknown'}
+                              {(file.size / 1024 / 1024).toFixed(2)} MB • <span className="text-golden-400">{forcedType}</span>
                           </p>
                         </div>
                       </div>
                       <div className="text-xs text-golden-400">
-                        {(file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.xlsb')) ? 'Movimentações' : 
-                         file.name.endsWith('.pdf') ? 'Inventário' : 'Movimentações'}
+                          {forcedLabel}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

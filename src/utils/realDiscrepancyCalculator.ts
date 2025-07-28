@@ -17,8 +17,12 @@ export interface DiscrepanciaReal {
   discrepancia_tipo: 'Sem Discrepância' | 'Estoque Excedente' | 'Estoque Faltante' | 'Divergência Física/Contábil';
   discrepancia_valor: number;
   observacoes: string;
-  ano: number;
-  user_id: string;
+  ano?: number;
+  user_id?: string;
+  // Novos campos para Top 5 mais vendidos
+  fonte_inventario_fisico?: number;
+  fonte_inventario_contabil?: number;
+  ranking_vendas?: number;
 }
 
 export function calcularDiscrepanciasReais(

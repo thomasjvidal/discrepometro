@@ -1,118 +1,88 @@
-import { useState, useCallback } from 'react';
-import { Toaster } from "@/components/ui/toaster";
-import { useToast } from "@/components/ui/use-toast";
-import DiscrepometroUpload from '@/components/DiscrepometroUpload';
-import LoadingAnalysis from '@/components/LoadingAnalysis';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import DiscrepometroUpload from '../components/DiscrepometroUpload';
+import LoadingAnalysis from '../components/LoadingAnalysis';
 import Dashboard from './Dashboard';
-import { processarArquivosPython, verificarStatusServidor } from '../services/pythonProcessor';
-
-type FlowState = 'upload' | 'processing' | 'dashboard';
+import { processarArquivosReais, ProcessamentoProgress } from '../services/realProcessor';
 
 export default function MainFlow() {
-  const [currentFlow, setCurrentFlow] = useState<FlowState>('upload');
-  const [processProgress, setProcessProgress] = useState({
+  const [currentFlow, setCurrentFlow] = useState<'upload' | 'processing' | 'dashboard'>('upload');
+  const [processProgress, setProcessProgress] = useState<ProcessamentoProgress>({
     etapa: '',
     progresso: 0,
     mensagem: '',
     detalhes: ''
   });
-  const { toast } = useToast();
+
+  const navigate = useNavigate();
 
   const handleFilesUploaded = async (files: File[]) => {
-    console.log('🗂️ Arquivos recebidos:', files.length);
+    console.log('📁 Arquivos recebidos para processamento:', files.map(f => f.name));
     
-    if (files.length === 0) {
-      toast({
-        title: "Erro",
-        description: "Selecione pelo menos um arquivo",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Verificar tipos de arquivo suportados
-    const tiposSuportados = ['.pdf', '.xlsx', '.xls', '.xlsb', '.csv'];
-    const arquivosInvalidos = files.filter(file => 
-      !tiposSuportados.some(tipo => file.name.toLowerCase().endsWith(tipo))
+    // FASE 1: VALIDAR ARQUIVOS
+    const pdfs = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+    const excels = files.filter(f => 
+      f.name.toLowerCase().endsWith('.xlsx') || 
+      f.name.toLowerCase().endsWith('.xls') ||
+      f.name.toLowerCase().endsWith('.csv')
     );
-
-    if (arquivosInvalidos.length > 0) {
-      toast({
-        title: "Arquivos não suportados",
-        description: `Tipos suportados: PDF, XLSX, XLS, XLSB, CSV`,
-        variant: "destructive"
-      });
+    
+    if (pdfs.length < 2) {
+      toast.error('São necessários pelo menos 2 PDFs (inventário físico e contábil)');
       return;
     }
 
-    // Verificar se servidor está online
+    if (excels.length < 1) {
+      toast.error('É necessário pelo menos 1 arquivo Excel/CSV com movimentações fiscais');
+      return;
+    }
+
+    // FASE 2: INICIAR PROCESSAMENTO
     setCurrentFlow('processing');
-    setProcessProgress({ 
-      etapa: 'Verificando servidor', 
-      progresso: 10, 
-      mensagem: 'Conectando com o servidor...', 
-      detalhes: 'Verificando status do processador Python' 
-    });
-
-    const servidorOnline = await verificarStatusServidor();
-    if (!servidorOnline) {
-      toast({
-        title: "Servidor offline",
-        description: "O servidor de processamento não está disponível",
-        variant: "destructive"
-      });
-      setCurrentFlow('upload');
-      return;
-    }
-
-    // FASE 2: PROCESSAMENTO PYTHON
-    setProcessProgress({ 
-      etapa: 'Processando arquivos', 
-      progresso: 20, 
-      mensagem: 'Enviando arquivos para processamento...', 
-      detalhes: `${files.length} arquivo(s) sendo processados` 
-    });
-
+    
+    const toastId = toast.loading('Iniciando processamento...');
+    
     try {
-      // Simular progresso durante processamento
-      const progressInterval = setInterval(() => {
-        setProcessProgress(prev => ({
-          ...prev,
-          progresso: Math.min(prev.progresso + 10, 90),
-          mensagem: prev.progresso < 50 ? 'Lendo PDFs...' : 
-                   prev.progresso < 70 ? 'Processando planilhas...' : 
-                   'Calculando discrepâncias...'
-        }));
-      }, 1000);
-
-      const result = await processarArquivosPython(files);
-      clearInterval(progressInterval);
-
-      setProcessProgress({ 
-        etapa: 'Finalizando', 
-        progresso: 100, 
-        mensagem: 'Processamento concluído!', 
-        detalhes: result.message 
-      });
-
-      // FASE 3: DASHBOARD
-      toast({
-        title: "Sucesso!",
-        description: "Arquivos processados com sucesso pelo Python!"
+      // Usar o processador real com progresso real
+      const result = await processarArquivosReais(files, (progress) => {
+        setProcessProgress(progress);
+        
+        // Atualizar toast com progresso
+        toast.loading(
+          `${progress.etapa}: ${progress.mensagem}`, 
+          { id: toastId }
+        );
       });
       
+      // FASE 3: VERIFICAR RESULTADO
+      if (result.success) {
+        toast.success(
+          `Processamento concluído! ${result.discrepancias.length} discrepâncias encontradas`, 
+          { id: toastId }
+        );
+        
+        // Aguardar um pouco para mostrar o resultado final
       setTimeout(() => {
         setCurrentFlow('dashboard');
       }, 1500);
+        
+      } else {
+        throw new Error(result.message);
+      }
       
     } catch (error: any) {
-      console.error('❌ Erro:', error);
-      toast({
-        title: "Erro no processamento",
-        description: `${error.message}`,
-        variant: "destructive"
-      });
+      console.error('❌ Erro no processamento:', error);
+      
+      toast.error(
+        `Erro no processamento: ${error.message}`, 
+        { id: toastId }
+      );
+      
+      // Voltar para upload em caso de erro
+      setTimeout(() => {
       setCurrentFlow('upload');
+      }, 2000);
     }
   };
 
@@ -127,6 +97,7 @@ export default function MainFlow() {
             progresso={processProgress.progresso}
             mensagem={processProgress.mensagem}
             detalhes={processProgress.detalhes}
+            subProgresso={processProgress.subProgresso}
           />
         );
       case 'dashboard':
@@ -137,9 +108,10 @@ export default function MainFlow() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="container mx-auto px-4 py-8">
       {renderContent()}
-      <Toaster />
+      </div>
     </div>
   );
 } 
