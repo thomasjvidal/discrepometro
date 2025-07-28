@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload as UploadIcon, Table, FileText, Database } from 'lucide-react';
+import { Upload as UploadIcon, FileSpreadsheet, FileText, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import UploadArea from '@/components/UploadArea';
@@ -189,7 +189,7 @@ const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded bg-golden-500/20 flex items-center justify-center">
                           {(file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.xlsb')) ? (
-                            <Table className="w-4 h-4 text-golden-400" />
+                            <FileSpreadsheet className="w-4 h-4 text-golden-400" />
                           ) : file.name.endsWith('.pdf') ? (
                             <FileText className="w-4 h-4 text-red-400" />
                           ) : (
