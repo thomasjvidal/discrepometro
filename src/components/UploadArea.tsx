@@ -1,14 +1,17 @@
 
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, FileText, Database } from 'lucide-react';
+import { Upload, FileText, Database, FileSpreadsheet } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 
 interface UploadAreaProps {
   onFileUpload: (files: File[]) => void;
+  isUploading?: boolean;
+  progress?: number;
+  error?: string;
 }
 
-const UploadArea = ({ onFileUpload }: UploadAreaProps) => {
+const UploadArea = ({ onFileUpload, isUploading = false, progress = 0, error }: UploadAreaProps) => {
   const [isDragActive, setIsDragActive] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -22,7 +25,10 @@ const UploadArea = ({ onFileUpload }: UploadAreaProps) => {
     onDragLeave: () => setIsDragActive(false),
     accept: {
       'text/csv': ['.csv'],
-      'application/pdf': ['.pdf']
+      'application/pdf': ['.pdf'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'application/vnd.ms-excel': ['.xls'],
+      'application/vnd.ms-excel.sheet.binary.macroEnabled.12': ['.xlsb']
     },
     multiple: true
   });
@@ -44,7 +50,9 @@ const UploadArea = ({ onFileUpload }: UploadAreaProps) => {
         neomorphism p-12 text-center border-2 border-dashed transition-all duration-300
         ${isDragActive 
           ? 'border-golden-400 bg-golden-500/10' 
-          : 'border-dark-600 hover:border-golden-500/50'
+          : error 
+            ? 'border-red-400 bg-red-500/10'
+            : 'border-dark-600 hover:border-golden-500/50'
         }
       `}>
         <div className="space-y-6">
@@ -68,8 +76,13 @@ const UploadArea = ({ onFileUpload }: UploadAreaProps) => {
               {isDragActive ? 'Solte os arquivos aqui' : 'Arraste os arquivos ou clique para selecionar'}
             </h3>
             <p className="text-dark-400">
-              Suporte para CSV e PDF • Até 100MB por arquivo
+              Suporte para CSV, PDF e Excel • Até 100MB por arquivo
             </p>
+            {error && (
+              <p className="text-red-400 text-sm mt-2">
+                {error}
+              </p>
+            )}
           </div>
 
           {/* File Type Icons */}
@@ -80,10 +93,30 @@ const UploadArea = ({ onFileUpload }: UploadAreaProps) => {
             </div>
             <div className="w-px h-6 bg-dark-700"></div>
             <div className="flex items-center gap-2 text-dark-500">
+              <FileSpreadsheet className="w-5 h-5" />
+              <span className="text-sm">Excel</span>
+            </div>
+            <div className="w-px h-6 bg-dark-700"></div>
+            <div className="flex items-center gap-2 text-dark-500">
               <FileText className="w-5 h-5" />
               <span className="text-sm">PDF</span>
             </div>
           </div>
+          
+          {/* Progress Indicator */}
+          {isUploading && (
+            <div className="mt-4 space-y-2">
+              <div className="w-full bg-dark-700 rounded-full h-2">
+                <div 
+                  className="bg-golden-400 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              <p className="text-sm text-golden-400">
+                Processando... {progress}%
+              </p>
+            </div>
+          )}
         </div>
       </Card>
     </div>
