@@ -1,37 +1,80 @@
 
 import { useState, useEffect } from 'react';
-import { Sparkles, Database, FileText, CheckCircle } from 'lucide-react';
+import { Sparkles, Database, FileText, CheckCircle, FileSpreadsheet, Calculator } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 
-const LoadingAnalysis = () => {
-  const [progress, setProgress] = useState(0);
+interface LoadingAnalysisProps {
+  etapa: string;
+  progresso: number;
+  mensagem: string;
+  detalhes?: string;
+  subProgresso?: {
+    pdf1?: {
+      paginaAtual: number;
+      totalPaginas: number;
+      linhasProcessadas: number;
+      produtosEncontrados: number;
+    };
+    pdf2?: {
+      paginaAtual: number;
+      totalPaginas: number;
+      linhasProcessadas: number;
+      produtosEncontrados: number;
+    };
+    excel1?: {
+      planilhaAtual: number;
+      totalPlanilhas: number;
+      linhasProcessadas: number;
+      movimentacoesEncontradas: number;
+    };
+    excel2?: {
+      planilhaAtual: number;
+      totalPlanilhas: number;
+      linhasProcessadas: number;
+      movimentacoesEncontradas: number;
+    };
+  };
+}
+
+const LoadingAnalysis = ({ etapa, progresso, mensagem, detalhes, subProgresso }: LoadingAnalysisProps) => {
   const [currentStep, setCurrentStep] = useState(0);
 
-  const steps = [
-    { label: 'Processando CSV', description: 'Lendo movimentações e CFOPs', icon: Database },
-    { label: 'Analisando PDFs', description: 'Extraindo dados dos inventários', icon: FileText },
-    { label: 'Detectando Discrepâncias', description: 'Comparando estoques e movimentações', icon: Sparkles },
-    { label: 'Finalizando', description: 'Preparando relatório detalhado', icon: CheckCircle }
-  ];
+  // Mapear etapas para steps
+  const getStepFromEtapa = (etapa: string) => {
+    if (etapa.includes('PDF')) return 0;
+    if (etapa.includes('Excel')) return 1;
+    if (etapa.includes('Calculando')) return 2;
+    if (etapa.includes('Salvando') || etapa.includes('Concluído')) return 3;
+    return 0;
+  };
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setProgress(prev => {
-        const newProgress = prev + 1;
-        
-        // Update step based on progress
-        if (newProgress <= 25) setCurrentStep(0);
-        else if (newProgress <= 50) setCurrentStep(1);
-        else if (newProgress <= 75) setCurrentStep(2);
-        else setCurrentStep(3);
-        
-        return newProgress > 100 ? 100 : newProgress;
-      });
-    }, 30);
+    setCurrentStep(getStepFromEtapa(etapa));
+  }, [etapa]);
 
-    return () => clearInterval(timer);
-  }, []);
+  const steps = [
+    { 
+      label: 'Lendo PDFs', 
+      description: 'Extraindo dados dos inventários físico e contábil', 
+      icon: FileText 
+    },
+    { 
+      label: 'Processando Excel', 
+      description: 'Lendo movimentações fiscais e CFOPs', 
+      icon: FileSpreadsheet 
+    },
+    { 
+      label: 'Calculando Discrepâncias', 
+      description: 'Cruzando dados e identificando diferenças', 
+      icon: Calculator 
+    },
+    { 
+      label: 'Finalizando', 
+      description: 'Salvando resultados no banco de dados', 
+      icon: CheckCircle 
+    }
+  ];
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
@@ -44,20 +87,67 @@ const LoadingAnalysis = () => {
                 <Sparkles className="w-10 h-10 text-dark-900" />
               </div>
               <h2 className="text-3xl font-bold bg-gradient-to-r from-golden-400 to-golden-600 bg-clip-text text-transparent">
-                Analisando Arquivos
+                {etapa}
               </h2>
               <p className="text-dark-400">
-                Processando dados e identificando discrepâncias...
+                {mensagem}
               </p>
+              {detalhes && (
+                <p className="text-sm text-dark-500">
+                  {detalhes}
+                </p>
+              )}
             </div>
 
             {/* Progress */}
             <div className="space-y-4">
-              <Progress value={progress} className="h-3 bg-dark-800" />
+              <Progress value={progresso} className="h-3 bg-dark-800" />
               <div className="text-2xl font-bold text-golden-400">
-                {progress}%
+                {progresso}%
               </div>
             </div>
+
+            {/* Sub Progress Details */}
+            {subProgresso && (
+              <div className="space-y-3 text-left">
+                {subProgresso.pdf1 && (
+                  <div className="bg-dark-800/30 p-3 rounded-lg">
+                    <div className="text-sm font-medium text-golden-400">PDF Físico</div>
+                    <div className="text-xs text-dark-400">
+                      Página {subProgresso.pdf1.paginaAtual}/{subProgresso.pdf1.totalPaginas} • 
+                      {subProgresso.pdf1.produtosEncontrados} produtos encontrados
+                    </div>
+                  </div>
+                )}
+                {subProgresso.pdf2 && (
+                  <div className="bg-dark-800/30 p-3 rounded-lg">
+                    <div className="text-sm font-medium text-golden-400">PDF Contábil</div>
+                    <div className="text-xs text-dark-400">
+                      Página {subProgresso.pdf2.paginaAtual}/{subProgresso.pdf2.totalPaginas} • 
+                      {subProgresso.pdf2.produtosEncontrados} produtos encontrados
+                    </div>
+                  </div>
+                )}
+                {subProgresso.excel1 && (
+                  <div className="bg-dark-800/30 p-3 rounded-lg">
+                    <div className="text-sm font-medium text-golden-400">Excel 1</div>
+                    <div className="text-xs text-dark-400">
+                      Planilha {subProgresso.excel1.planilhaAtual}/{subProgresso.excel1.totalPlanilhas} • 
+                      {subProgresso.excel1.movimentacoesEncontradas} movimentações encontradas
+                    </div>
+                  </div>
+                )}
+                {subProgresso.excel2 && (
+                  <div className="bg-dark-800/30 p-3 rounded-lg">
+                    <div className="text-sm font-medium text-golden-400">Excel 2</div>
+                    <div className="text-xs text-dark-400">
+                      Planilha {subProgresso.excel2.planilhaAtual}/{subProgresso.excel2.totalPlanilhas} • 
+                      {subProgresso.excel2.movimentacoesEncontradas} movimentações encontradas
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Steps */}
             <div className="space-y-4">
@@ -99,7 +189,7 @@ const LoadingAnalysis = () => {
                       </h3>
                       <p className={`
                         text-sm transition-colors duration-500
-                        ${isActive ? 'text-golden-300' : isCompleted ? 'text-green-300' : 'text-dark-600'}
+                        ${isActive || isCompleted ? 'text-dark-400' : 'text-dark-600'}
                       `}>
                         {step.description}
                       </p>
