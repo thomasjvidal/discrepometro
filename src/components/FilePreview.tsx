@@ -1,12 +1,12 @@
 
-import { X, FileText, Database, CheckCircle } from 'lucide-react';
+import { X, FileText, Database, CheckCircle, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
 interface FilePreviewProps {
   file: {
     file: File;
-    type: 'csv' | 'pdf';
+    type: 'csv' | 'pdf' | 'excel';
   };
   onRemove: () => void;
 }
@@ -21,7 +21,9 @@ const FilePreview = ({ file, onRemove }: FilePreviewProps) => {
   };
 
   const getFileIcon = () => {
-    return file.type === 'csv' ? Database : FileText;
+    if (file.type === 'csv') return Database;
+    if (file.type === 'excel') return FileSpreadsheet;
+    return FileText;
   };
 
   const Icon = getFileIcon();
@@ -35,7 +37,9 @@ const FilePreview = ({ file, onRemove }: FilePreviewProps) => {
             p-3 rounded-xl
             ${file.type === 'csv' 
               ? 'bg-blue-500/20 text-blue-400' 
-              : 'bg-red-500/20 text-red-400'
+              : file.type === 'excel'
+                ? 'bg-green-500/20 text-green-400'
+                : 'bg-red-500/20 text-red-400'
             }
           `}>
             <Icon className="w-6 h-6" />
@@ -61,10 +65,12 @@ const FilePreview = ({ file, onRemove }: FilePreviewProps) => {
             px-3 py-1 rounded-lg text-xs font-medium
             ${file.type === 'csv' 
               ? 'bg-blue-500/20 text-blue-400' 
-              : 'bg-red-500/20 text-red-400'
+              : file.type === 'excel'
+                ? 'bg-green-500/20 text-green-400'
+                : 'bg-red-500/20 text-red-400'
             }
           `}>
-            {file.type === 'csv' ? 'Movimentações' : 'Inventário'}
+            {file.type === 'csv' ? 'Movimentações' : file.type === 'excel' ? 'Excel' : 'Inventário'}
           </div>
         </div>
 

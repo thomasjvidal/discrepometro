@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload as UploadIcon, FileText, Database, Sparkles } from 'lucide-react';
+import { Upload as UploadIcon, FileText, Database, Sparkles, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import UploadArea from '@/components/UploadArea';
@@ -11,7 +11,7 @@ import { toast } from '@/hooks/use-toast';
 
 interface UploadedFile {
   file: File;
-  type: 'csv' | 'pdf';
+  type: 'csv' | 'pdf' | 'excel';
   preview?: string;
 }
 
@@ -64,21 +64,77 @@ const Upload = () => {
     }
   };
 
+  const uploadExcelToSupabase = async (file: File) => {
+    setIsUploading(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('user_id', crypto.randomUUID());
+
+      const response = await fetch('https://hvjjcegcdivumprqviug.functions.supabase.co/upload_xlsx', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2ampjZWdjZGl2dW1wcnF2aXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2Nzg1MDAsImV4cCI6MjA2MzI1NDUwMH0.nerS1VvC5ebHOyHrtTMwrzdpCkAWpRpfvlvdlSspiG4'
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      toast({
+        title: "Excel processado com sucesso",
+        description: `Arquivo ${file.name} foi enviado e processado.`,
+      });
+
+      console.log('Excel upload result:', result);
+      return result;
+    } catch (error) {
+      console.error('Erro no upload do Excel:', error);
+      toast({
+        title: "Erro no upload do Excel",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive"
+      });
+      throw error;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleFileUpload = async (files: File[]) => {
-    const newFiles: UploadedFile[] = files.map(file => ({
-      file,
-      type: file.type === 'text/csv' ? 'csv' : 'pdf'
-    }));
+    const newFiles: UploadedFile[] = files.map(file => {
+      let type: 'csv' | 'pdf' | 'excel';
+      if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+        type = 'csv';
+      } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.xlsb')) {
+        type = 'excel';
+      } else {
+        type = 'pdf';
+      }
+      return { file, type };
+    });
     
     setUploadedFiles(prev => [...prev, ...newFiles]);
     
-    // Processar arquivos CSV automaticamente
+    // Processar arquivos CSV e Excel automaticamente
     for (const fileData of newFiles) {
       if (fileData.type === 'csv') {
         try {
           await uploadCsvToSupabase(fileData.file);
         } catch (error) {
           // Erro já tratado na função uploadCsvToSupabase
+        }
+      } else if (fileData.type === 'excel') {
+        try {
+          await uploadExcelToSupabase(fileData.file);
+        } catch (error) {
+          // Erro já tratado na função uploadExcelToSupabase
         }
       }
     }
@@ -155,12 +211,12 @@ const Upload = () => {
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-semibold text-foreground">Upload Inteligente</h2>
               <p className="text-dark-400">
-                Faça upload do CSV com movimentações e PDFs de inventário
+                Faça upload de CSV/Excel com movimentações e PDFs de inventário
               </p>
             </div>
 
             {/* File Requirements */}
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid md:grid-cols-3 gap-4">
               <Card className="neomorphism p-4 border-dark-700/50">
                 <div className="flex items-start gap-3">
                   <div className="p-2 rounded-lg bg-golden-500/20">
@@ -173,6 +229,23 @@ const Upload = () => {
                     </p>
                     <div className="text-xs text-dark-500 mt-2">
                       Até 2 milhões de linhas
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="neomorphism p-4 border-dark-700/50">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-golden-500/20">
+                    <FileSpreadsheet className="w-5 h-5 text-golden-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-foreground">Arquivo Excel</h3>
+                    <p className="text-sm text-dark-400 mt-1">
+                      Planilhas com movimentações fiscais (.xlsx, .xls, .xlsb)
+                    </p>
+                    <div className="text-xs text-dark-500 mt-2">
+                      Suporte completo
                     </div>
                   </div>
                 </div>
