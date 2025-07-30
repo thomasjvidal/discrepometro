@@ -159,33 +159,9 @@ const Upload = () => {
       return;
     }
 
-    setIsAnalyzing(true);
-    
-    // Simulate API call
-    try {
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      toast({
-        title: "Análise concluída",
-        description: "Redirecionando para o dashboard...",
-      });
-      
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 1500);
-    } catch (error) {
-      toast({
-        title: "Erro na análise",
-        description: "Ocorreu um erro durante o processamento. Tente novamente.",
-        variant: "destructive"
-      });
-      setIsAnalyzing(false);
-    }
+    // Redirecionar para a página de análise
+    navigate('/analise');
   };
-
-  if (isAnalyzing) {
-    return <LoadingAnalysis />;
-  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6">

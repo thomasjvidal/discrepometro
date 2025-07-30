@@ -57,7 +57,7 @@ app.get('/test-supabase', async (req, res) => {
   }
 });
 
-// Endpoint para processar arquivos com Python
+// Endpoint para processar arquivos com Discrepômetro Automático
 app.post('/api/process-files', upload.array('files'), async (req, res) => {
   console.log('🚀 Recebidos arquivos para processamento:', req.files?.length || 0);
   
@@ -71,72 +71,34 @@ app.post('/api/process-files', upload.array('files'), async (req, res) => {
   });
   
   try {
-    // Executar script Python no diretório de uploads
-    const pythonProcess = spawn('python3', ['../scripts/discrepometro_completo.py'], {
-      cwd: path.join(__dirname, 'uploads'),
-      env: {
-        ...process.env,
-        PYTHONPATH: path.join(__dirname, 'scripts')
-      }
-    });
+    // Usar o novo sistema automático Node.js
+    const { DiscrepometroAuto } = require('./scripts/discrepometro_auto.js');
+    const discrepometro = new DiscrepometroAuto();
     
-    let output = '';
-    let errorOutput = '';
+    // Executar análise no diretório de uploads
+    const uploadsDir = path.join(__dirname, 'uploads');
+    const resultado = await discrepometro.executarAnalise(uploadsDir);
     
-    // Capturar saída do script
-    pythonProcess.stdout.on('data', (data) => {
-      const text = data.toString();
-      console.log('🐍 Python:', text);
-      output += text;
-      
-      // Enviar progresso em tempo real via SSE (opcional)
-      if (text.includes('Processando')) {
-        // Pode implementar Server-Sent Events aqui para progresso real
-      }
-    });
-    
-    pythonProcess.stderr.on('data', (data) => {
-      const text = data.toString();
-      console.error('🐍 Python Error:', text);
-      errorOutput += text;
-    });
-    
-    pythonProcess.on('close', (code) => {
-      console.log(`🐍 Python script finalizado com código: ${code}`);
-      
-      // Limpar arquivos temporários
-      req.files.forEach(file => {
-        fs.unlink(file.path, (err) => {
-          if (err) console.log('Erro ao limpar arquivo:', err);
-        });
+    // Limpar arquivos temporários
+    req.files.forEach(file => {
+      fs.unlink(file.path, (err) => {
+        if (err) console.log('Erro ao limpar arquivo:', err);
       });
-      
-      if (code === 0) {
-        res.json({
-          success: true,
-          message: 'Processamento concluído com sucesso',
-          output: output,
-          timestamp: new Date().toISOString()
-        });
-      } else {
-        res.status(500).json({
-          error: 'Erro no processamento Python',
-          output: output,
-          errorOutput: errorOutput,
-          code: code
-        });
-      }
     });
     
-    // Timeout de 5 minutos
-    setTimeout(() => {
-      pythonProcess.kill();
-      res.status(408).json({ error: 'Timeout no processamento' });
-    }, 5 * 60 * 1000);
+    res.json({
+      success: true,
+      message: 'Processamento automático concluído com sucesso',
+      resultado: resultado,
+      timestamp: new Date().toISOString()
+    });
     
   } catch (error) {
-    console.error('❌ Erro ao executar script Python:', error);
-    res.status(500).json({ error: error.message });
+    console.error('❌ Erro no processamento automático:', error);
+    res.status(500).json({ 
+      error: 'Erro no processamento automático', 
+      message: error.message 
+    });
   }
 });
 
@@ -149,14 +111,19 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// Servir arquivos estáticos do React
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+// Rota de teste para verificar se o servidor está funcionando
+app.get('/test', (req, res) => {
+  res.json({ 
+    message: 'Backend do Discrepômetro funcionando!',
+    timestamp: new Date().toISOString()
+  });
 });
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log(`📊 Discrepômetro 2.0 - Integração Python ativa`);
-  console.log(`📋 Suporte XLSB: Ativo`);
+  console.log(`📊 Discrepômetro 3.0 - Sistema Automático Ativo`);
+  console.log(`⚡ Processamento: TypeScript/Node.js com streaming`);
+  console.log(`📋 Capacidade: Milhões de linhas + PDFs grandes`);
+  console.log(`🔗 Proxy configurado para Vite em http://localhost:8080`);
 }); 

@@ -4,9 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Upload from "./pages/Upload";
+import Analysis from "./pages/Analysis";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
-import DiscrepometroFiscal from "./pages/DiscrepometroFiscal";
 
 const queryClient = new QueryClient();
 
@@ -19,8 +19,8 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Upload />} />
+            <Route path="/analise" element={<Analysis />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/discrepometro" element={<DiscrepometroFiscal />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -1,13 +1,13 @@
 # 🚀 Discrepômetro - Radar Fiscal Inteligente
 
-Sistema automatizado para detectar discrepâncias entre inventário declarado e movimentações fiscais, identificando inconsistências e calculando os produtos mais vendidos.
+Sistema automatizado para detectar discrepâncias entre inventário declarado e movimentações fiscais, identificando inconsistências e calculando os 10 produtos mais vendidos.
 
 ## 📋 Visão Geral
 
 O **Discrepômetro** é um sistema inteligente que:
 
 1. **Processa 4 arquivos** (2 PDFs de inventário + 2 planilhas de movimentação)
-2. **Identifica os produtos mais vendidos** baseado em CFOPs de venda
+2. **Identifica os 10 produtos mais vendidos** baseado em CFOPs de venda
 3. **Compara vendas com inventários** para detectar discrepâncias
 4. **Gera relatório visual** com estatísticas e alertas
 
@@ -16,8 +16,20 @@ O **Discrepômetro** é um sistema inteligente que:
 Automatizar a análise fiscal comparativa entre anos diferentes, identificando:
 - ✅ Produtos vendidos sem estoque suficiente
 - ✅ Discrepâncias entre inventário físico e contábil
-- ✅ Top produtos mais vendidos
+- ✅ Top 10 produtos mais vendidos
 - ✅ Alertas de conformidade fiscal
+
+## 📁 Arquivos de Entrada
+
+O sistema processa **4 arquivos**:
+
+### 📄 PDFs de Inventário (2 arquivos)
+- `inventario_2023.pdf` - Estoque final de 2023
+- `inventario_2024.pdf` - Estoque final de 2024
+
+### 📊 Planilhas de Movimentação (2 arquivos)
+- `emitente_itens_2023.csv` - Vendas/compras emitidas
+- `destinatario_itens_2023.csv` - Vendas/compras recebidas
 
 ## 🚀 Instalação
 
@@ -32,59 +44,57 @@ cd discrepometro
 pip install -r requirements.txt
 ```
 
-### 3. Instalar dependências Node.js
+### 3. Verificar instalação
 ```bash
-npm install
+python scripts/test_discrepometro.py --criar-teste
 ```
-
-### 4. Configurar Supabase
-- Copiar as credenciais do Supabase para `src/lib/supabase.ts`
-- Executar as migrações do banco de dados
 
 ## 🧪 Teste Rápido
 
-### 1. Executar análise
+### 1. Criar dados de teste
 ```bash
-python discrepometro_final.py
+python scripts/test_discrepometro.py --criar-teste
 ```
 
-### 2. Iniciar interface web
+### 2. Executar análise
 ```bash
-npm run dev
+python scripts/test_discrepometro.py
 ```
 
-### 3. Acessar aplicação
-```
-http://localhost:5173
+### 3. Verificar resultado
+```bash
+cat relatorio_discrepometro.json
 ```
 
 ## 📊 Uso via CLI
 
 ### Análise com arquivos próprios
 ```bash
-python discrepometro_final.py
+python scripts/discrepometro_completo.py /caminho/para/arquivos
 ```
 
-### Interface web
+### Criar dados de teste
 ```bash
-npm run dev
+python scripts/test_discrepometro.py --criar-teste --diretorio ./meus_dados
+```
+
+### Análise com saída personalizada
+```bash
+python scripts/test_discrepometro.py --output meu_relatorio.json
 ```
 
 ## 🔧 Estrutura do Projeto
 
 ```
 discrepometro/
-├── discrepometro_final.py    # Script principal Python
-├── requirements.txt          # Dependências Python
-├── package.json             # Dependências Node.js
-├── src/                     # Frontend React
-│   ├── App.tsx             # Aplicação principal
-│   ├── pages/              # Páginas da aplicação
-│   ├── components/         # Componentes React
-│   ├── services/           # Serviços de processamento
-│   └── utils/              # Utilitários
-├── supabase/               # Configurações do banco
-└── README.md               # Este arquivo
+├── scripts/
+│   ├── discrepometro_completo.py    # Script principal
+│   ├── process_xlsx.py              # Processamento de planilhas
+│   ├── process_pdf.py               # Processamento de PDFs
+│   ├── discrepancy_calculator.py    # Cálculo de discrepâncias
+│   └── test_discrepometro.py       # CLI para testes
+├── requirements.txt                  # Dependências Python
+└── README_DISCREPOMETRO.md         # Este arquivo
 ```
 
 ## 📈 Lógica de Funcionamento
@@ -93,7 +103,7 @@ discrepometro/
 - ✅ Carrega CSV/Excel com milhões de linhas
 - ✅ Filtra CFOPs de venda: `5101`, `5102`, `6101`, `6102`, `5405`, `6405`
 - ✅ Agrupa por produto e soma quantidades
-- ✅ Identifica top produtos mais vendidos
+- ✅ Identifica top 10 produtos mais vendidos
 
 ### Etapa 2: Processamento de PDFs
 - ✅ Extrai tabelas dos PDFs de inventário
@@ -106,7 +116,7 @@ discrepometro/
 - ✅ Calcula diferença: `Estoque_2024 - Estoque_2023 - Vendas`
 - ✅ Classifica status: **OK** / **ALERTA** / **CRÍTICO**
 
-## �� Formato de Saída
+## 📊 Formato de Saída
 
 ### JSON de Relatório
 ```json
@@ -154,17 +164,16 @@ discrepometro/
 ## 🔧 Configuração Avançada
 
 ### CFOPs de Venda
-Editar em `src/utils/realDiscrepancyCalculator.ts`:
-```typescript
-// CFOPs de venda: 5xxx, 6xxx, 7xxx
-if (cfopNum >= 5000 && cfopNum < 8000) {
+Editar em `scripts/process_xlsx.py`:
+```python
+CFOPS_VENDA = ['5101', '5102', '6101', '6102', '5405', '6405']
 ```
 
 ### Limite de Discrepância
-Editar em `src/utils/realDiscrepancyCalculator.ts`:
-```typescript
-// Se a diferença é muito grande (mais de 10% da quantidade vendida)
-if (abs(diferenca_esperada) > (quantidade_vendida * 0.1):
+Editar em `scripts/discrepancy_calculator.py`:
+```python
+# Se a diferença é muito grande (mais de 10% da quantidade vendida)
+if abs(diferenca_esperada) > (quantidade_vendida * 0.1):
 ```
 
 ## 🐛 Troubleshooting
@@ -172,7 +181,7 @@ if (abs(diferenca_esperada) > (quantidade_vendida * 0.1):
 ### Erro: "Arquivos não encontrados"
 - ✅ Verificar se os 4 arquivos estão no diretório
 - ✅ Verificar nomes dos arquivos (deve conter ano)
-- ✅ Usar dados de exemplo como referência
+- ✅ Usar `--criar-teste` para gerar dados de exemplo
 
 ### Erro: "Nenhuma tabela encontrada no PDF"
 - ✅ Verificar se o PDF contém tabelas
@@ -182,13 +191,13 @@ if (abs(diferenca_esperada) > (quantidade_vendida * 0.1):
 ### Erro: "Colunas não encontradas"
 - ✅ Verificar se as planilhas têm as colunas necessárias
 - ✅ Verificar nomes das colunas (produto, quantidade, cfop)
-- ✅ Usar dados de exemplo como referência
+- ✅ Usar dados de teste como referência
 
 ## 📞 Suporte
 
 Para dúvidas ou problemas:
 1. Verificar logs em `discrepometro.log`
-2. Executar com dados de exemplo primeiro
+2. Executar com dados de teste primeiro
 3. Verificar formato dos arquivos de entrada
 
 ## 🚀 Próximos Passos
@@ -201,4 +210,4 @@ Para dúvidas ou problemas:
 
 ---
 
-**Desenvolvido com ❤️ para automatizar análises fiscais**
+**Desenvolvido com ❤️ para automatizar análises fiscais** 

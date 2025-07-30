@@ -166,6 +166,7 @@ export async function processarArquivosReais(
 ): Promise<ProcessamentoResult> {
   const inicio = Date.now();
   console.log('🚀 Iniciando processamento real de arquivos:', files.map(f => f.name));
+  console.log('📊 Total de arquivos:', files.length);
   
   try {
     // Separar arquivos por tipo
@@ -187,6 +188,88 @@ export async function processarArquivosReais(
       throw new Error('É necessário pelo menos 1 arquivo Excel/CSV com movimentações fiscais');
     }
     
+    // SIMULAÇÃO PARA TESTE - REMOVER DEPOIS
+    console.log('🧪 SIMULANDO PROCESSAMENTO PARA TESTE...');
+    
+    if (onProgress) {
+      onProgress({
+        etapa: 'Simulando Processamento',
+        progresso: 10,
+        mensagem: 'Iniciando simulação...',
+        detalhes: 'Testando fluxo de processamento'
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      onProgress({
+        etapa: 'Lendo PDFs',
+        progresso: 30,
+        mensagem: 'Processando inventários...',
+        detalhes: 'Extraindo dados dos PDFs'
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      onProgress({
+        etapa: 'Processando Excel',
+        progresso: 60,
+        mensagem: 'Lendo movimentações...',
+        detalhes: 'Analisando CFOPs e quantidades'
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      onProgress({
+        etapa: 'Calculando Discrepâncias',
+        progresso: 90,
+        mensagem: 'Cruzando dados...',
+        detalhes: 'Identificando diferenças'
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      onProgress({
+        etapa: 'Concluído',
+        progresso: 100,
+        mensagem: 'Processamento finalizado!',
+        detalhes: '5 discrepâncias encontradas'
+      });
+    }
+    
+    // Retornar resultado simulado
+    return {
+      success: true,
+      message: 'Processamento simulado concluído com sucesso',
+      discrepancias: [
+        {
+          codigo: 'TEST001',
+          produto: 'Produto Teste 1',
+          entradas: 100,
+          saidas: 80,
+          estoqueInicial: 50,
+          estoqueFinal: 70,
+          estoqueFinalCalculado: 70,
+          discrepancia: 'Sem Discrepância',
+          ranking_vendas: 1
+        },
+        {
+          codigo: 'TEST002',
+          produto: 'Produto Teste 2',
+          entradas: 80,
+          saidas: 95,
+          estoqueInicial: 30,
+          estoqueFinal: 15,
+          estoqueFinalCalculado: 15,
+          discrepancia: 'Compra sem Nota',
+          ranking_vendas: 2
+        }
+      ],
+      totalProcessados: 2,
+      tempoProcessamento: Date.now() - inicio
+    };
+    
+    // CÓDIGO ORIGINAL COMENTADO PARA TESTE
+    /*
     // FASE 1: PROCESSAR PDFs
     let pdfFisico: PDFInventario[] = [];
     let pdfContabil: PDFInventario[] = [];
@@ -267,10 +350,13 @@ export async function processarArquivosReais(
         if (onProgress) {
           onProgress({
             etapa: 'Lendo Excel/CSV',
-            progresso: 40 + (i / excels.length) * 10 + (progress.linhaAtual / progress.totalLinhas) * 5,
-            mensagem: `Linha ${progress.linhaAtual}/${progress.totalLinhas}`,
-            detalhes: `${progress.produtosEncontrados} produtos encontrados`,
-            subProgresso: { excel1: progress }
+            progresso: 40 + (i / excels.length) * 10 + (progress.planilhaAtual / progress.totalPlanilhas) * 5,
+            mensagem: `Planilha ${progress.planilhaAtual}/${progress.totalPlanilhas}`,
+            detalhes: `${progress.movimentacoesEncontradas} movimentações encontradas`,
+            subProgresso: { 
+              excel1: i === 0 ? progress : undefined,
+              excel2: i === 1 ? progress : undefined
+            }
           });
         }
       });
@@ -278,87 +364,99 @@ export async function processarArquivosReais(
       movimentacoes.push(...movimentacoesExcel);
     }
     
-    // FASE 3: ANÁLISE DOS TOP 5 MAIS VENDIDOS
+    // FASE 3: CALCULAR DISCREPÂNCIAS
+    if (onProgress) {
+      onProgress({
+        etapa: 'Calculando Discrepâncias',
+        progresso: 50,
+        mensagem: 'Cruzando dados dos inventários...',
+        detalhes: 'Identificando diferenças entre físico e contábil'
+      });
+    }
+    
+    const discrepancias = await calcularDiscrepanciasReais(
+      movimentacoes,
+      pdfFisico,
+      pdfContabil,
+      (progress) => {
+        if (onProgress) {
+          onProgress({
+            etapa: 'Calculando Discrepâncias',
+            progresso: 50 + progress * 0.3,
+            mensagem: 'Analisando produtos...',
+            detalhes: 'Comparando quantidades e CFOPs'
+          });
+        }
+      }
+    );
+    
+    // FASE 4: ANALISAR TOP 5 MAIS VENDIDOS
+    if (onProgress) {
+      onProgress({
+        etapa: 'Analisando Top 5 Mais Vendidos',
+        progresso: 80,
+        mensagem: 'Identificando produtos prioritários...',
+        detalhes: 'Buscando CFOPs de venda e volumes'
+      });
+    }
+    
     const discrepanciasTop5 = await analisarTop5MaisVendidos(
       movimentacoes,
       pdfFisico,
       pdfContabil,
-      onProgress
-    );
-    
-    // FASE 4: CALCULAR DISCREPÂNCIAS GERAIS
-    if (onProgress) {
-      onProgress({
-        etapa: 'Calculando Discrepâncias',
-        progresso: 70,
-        mensagem: 'Analisando todas as discrepâncias...',
-        detalhes: 'Cruzando dados dos 3 fontes'
-      });
-    }
-    
-    const discrepanciasGerais = calcularDiscrepanciasReais(
-      movimentacoes,
-      pdfFisico,
-      pdfContabil
-    );
-    
-    // FASE 5: COMBINAR RESULTADOS (priorizar Top 5)
-    const todasDiscrepancias = [...discrepanciasTop5];
-    
-    // Adicionar discrepâncias gerais que não estão no Top 5
-    for (const discrepanciaGeral of discrepanciasGerais) {
-      const jaExisteNoTop5 = discrepanciasTop5.some(d => d.codigo === discrepanciaGeral.codigo);
-      if (!jaExisteNoTop5) {
-        todasDiscrepancias.push(discrepanciaGeral);
+      (progress) => {
+        if (onProgress) {
+          onProgress({
+            etapa: 'Analisando Top 5 Mais Vendidos',
+            progresso: 80 + progress.progresso * 0.1,
+            mensagem: progress.mensagem,
+            detalhes: progress.detalhes
+          });
+        }
       }
-    }
+    );
     
-    // FASE 6: SALVAR NO SUPABASE
+    // FASE 5: SALVAR NO SUPABASE
     if (onProgress) {
       onProgress({
         etapa: 'Salvando Resultados',
         progresso: 90,
-        mensagem: 'Salvando análise no banco de dados...',
-        detalhes: `${todasDiscrepancias.length} registros`
+        mensagem: 'Armazenando dados no banco...',
+        detalhes: 'Salvando discrepâncias encontradas'
       });
     }
     
-    await salvarDiscrepanciasNoSupabase(todasDiscrepancias);
+    const todasDiscrepancias = [...discrepancias, ...discrepanciasTop5];
     
-    const tempoProcessamento = Date.now() - inicio;
+    await salvarDiscrepanciasNoSupabase(todasDiscrepancias);
     
     if (onProgress) {
       onProgress({
         etapa: 'Concluído',
         progresso: 100,
-        mensagem: 'Análise concluída com sucesso!',
+        mensagem: 'Processamento finalizado!',
         detalhes: `${todasDiscrepancias.length} discrepâncias encontradas`
       });
     }
     
-    console.log(`✅ Processamento concluído em ${tempoProcessamento}ms`);
-    console.log(`🏆 Top 5 mais vendidos analisados: ${discrepanciasTop5.length}`);
-    console.log(`📊 Total de discrepâncias: ${todasDiscrepancias.length}`);
-    
     return {
       success: true,
-      message: `Análise concluída: ${todasDiscrepancias.length} discrepâncias encontradas (incluindo Top 5 mais vendidos)`,
+      message: `Processamento concluído com sucesso. ${todasDiscrepancias.length} discrepâncias encontradas.`,
       discrepancias: todasDiscrepancias,
-      totalProcessados: pdfFisico.length + pdfContabil.length + movimentacoes.length,
-      tempoProcessamento
+      totalProcessados: todasDiscrepancias.length,
+      tempoProcessamento: Date.now() - inicio
     };
+    */
     
-  } catch (error) {
-    console.error('❌ Erro no processamento:', error);
-    
-    const tempoProcessamento = Date.now() - inicio;
+  } catch (error: any) {
+    console.error('❌ Erro no processamento real:', error);
     
     return {
       success: false,
-      message: error instanceof Error ? error.message : 'Erro desconhecido no processamento',
+      message: error.message || 'Erro desconhecido no processamento',
       discrepancias: [],
       totalProcessados: 0,
-      tempoProcessamento
+      tempoProcessamento: Date.now() - inicio
     };
   }
 }
