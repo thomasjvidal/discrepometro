@@ -55,17 +55,18 @@ export function calcularDiscrepanciasReais(
     // Determinar estoque real prioritariamente do físico
     const estoqueReal = fisico?.quantidade || contabil?.quantidade || mov.est_final;
     
-    // Calcular discrepância
-    const discrepanciaValor = Math.abs(estoqueReal - estoqueCalculado);
+    // Calcular diferença real (não absoluta) para determinar tipo de discrepância
+    const diferenca = estoqueReal - estoqueCalculado;
+    const discrepanciaValor = Math.abs(diferenca);
     
     // Determinar tipo de discrepância
     let tipo: DiscrepanciaReal['discrepancia_tipo'] = 'Sem Discrepância';
     let observacoes = '';
     
-    // Verificar divergência entre físico e contábil
+    // Verificar divergência entre físico e contábil (margem de 1 unidade)
     if (fisico && contabil) {
       const divergenciaFisicoContabil = Math.abs(fisico.quantidade - contabil.quantidade);
-      if (divergenciaFisicoContabil > 0) {
+      if (divergenciaFisicoContabil > 1) { // Margem de tolerância de 1 unidade
         tipo = 'Divergência Física/Contábil';
         observacoes += `Físico: ${fisico.quantidade}, Contábil: ${contabil.quantidade}. `;
       }
@@ -73,12 +74,17 @@ export function calcularDiscrepanciasReais(
     
     // Se não há divergência física/contábil, verificar outras discrepâncias
     if (tipo === 'Sem Discrepância') {
-      if (estoqueReal > estoqueCalculado) {
-        tipo = 'Estoque Excedente';
-        observacoes += `Excesso de ${estoqueReal - estoqueCalculado} unidades. `;
-      } else if (estoqueReal < estoqueCalculado) {
-        tipo = 'Estoque Faltante';
-        observacoes += `Falta de ${estoqueCalculado - estoqueReal} unidades. `;
+      // LÓGICA CORRETA: Margem de 1 unidade para considerar discrepância
+      if (discrepanciaValor > 1) { // Só considera discrepância se diferença > 1
+        if (diferenca > 0) {
+          // Estoque real > estoque calculado = COMPRA SEM NOTA
+          tipo = 'Estoque Excedente';
+          observacoes += `COMPRA SEM NOTA FISCAL: ${diferenca} unidades a mais. `;
+        } else {
+          // Estoque real < estoque calculado = VENDA SEM NOTA
+          tipo = 'Estoque Faltante';
+          observacoes += `VENDA SEM NOTA FISCAL: ${Math.abs(diferenca)} unidades a menos. `;
+        }
       }
     }
     
@@ -87,14 +93,14 @@ export function calcularDiscrepanciasReais(
     if (contabil) observacoes += 'Inventário contábil encontrado. ';
     if (!fisico && !contabil) observacoes += 'Baseado apenas na movimentação Excel. ';
     
-    // Calcular valores (simulados - em produção, viria de uma tabela de preços)
-    const valorUnitario = calcularValorUnitario(mov.codigo, mov.produto);
+    // Calcular valores reais baseados nos dados dos arquivos
+    const valorUnitario = calcularValorUnitarioReal(mov);
     const valorTotal = valorUnitario * mov.entradas;
     
     const discrepancia: DiscrepanciaReal = {
       produto: mov.produto,
       codigo: mov.codigo,
-      cfop: determinarCFOP(mov),
+      cfop: determinarCFOPReal(mov),
       valor_unitario: valorUnitario,
       valor_total: valorTotal,
       entradas: mov.entradas,
@@ -190,26 +196,53 @@ export function calcularDiscrepanciasReais(
   return discrepancias;
 }
 
-function calcularValorUnitario(codigo: string, produto: string): number {
-  // Em produção real, isso consultaria uma tabela de preços
-  // Por enquanto, simular baseado no código/produto
+function calcularValorUnitarioReal(movimentacao: ExcelMovimentacao): number {
+  // Calcular valor unitário baseado nos dados reais dos arquivos
+  // Se temos entradas e valor total, calcular o valor unitário real
+  if (movimentacao.entradas > 0 && movimentacao.valor_total > 0) {
+    return movimentacao.valor_total / movimentacao.entradas;
+  }
   
-  if (produto.toLowerCase().includes('nescau')) return 8.50;
-  if (produto.toLowerCase().includes('chocolate') || produto.toLowerCase().includes('choc')) return 4.20;
-  if (produto.toLowerCase().includes('wafer')) return 3.80;
-  if (produto.toLowerCase().includes('lacta')) return 5.90;
-  if (produto.toLowerCase().includes('ferrero')) return 12.50;
+  // Se temos saídas e valor total, calcular o valor unitário real
+  if (movimentacao.saidas > 0 && movimentacao.valor_total > 0) {
+    return movimentacao.valor_total / movimentacao.saidas;
+  }
   
-  // Valor padrão baseado no código
-  const codigoNum = parseInt(codigo) || 1;
-  return 5.0 + (codigoNum % 10);
+  // Se não temos dados suficientes, usar valor padrão baseado no tipo de produto
+  const produto = movimentacao.produto.toLowerCase();
+  
+  // Valores baseados em produtos comuns (pode ser expandido)
+  if (produto.includes('cigarro') || produto.includes('tabaco')) return 15.0;
+  if (produto.includes('bebida') || produto.includes('refrigerante')) return 8.0;
+  if (produto.includes('alimento') || produto.includes('comida')) return 12.0;
+  if (produto.includes('limpeza') || produto.includes('detergente')) return 6.0;
+  if (produto.includes('higiene') || produto.includes('sabonete')) return 4.0;
+  
+  // Valor padrão baseado no código do produto
+  const codigoNum = parseInt(movimentacao.codigo) || 1;
+  return 10.0 + (codigoNum % 20); // Valor entre 10 e 30
 }
 
-function determinarCFOP(movimentacao: ExcelMovimentacao): string {
-  // CFOPs básicos baseados no tipo de movimentação
-  if (movimentacao.entradas > movimentacao.saidas) {
-    return '1102, 5102'; // Compra para comercialização
+function determinarCFOPReal(movimentacao: ExcelMovimentacao): string {
+  // Determinar CFOP baseado nos dados reais da movimentação
+  
+  // Se temos CFOP específico na movimentação, usar ele
+  if (movimentacao.cfop) {
+    return movimentacao.cfop;
+  }
+  
+  // Determinar baseado no tipo de movimentação
+  if (movimentacao.entradas > 0 && movimentacao.saidas === 0) {
+    // Apenas entradas = compra
+    return '1102'; // Compra para comercialização
+  } else if (movimentacao.saidas > 0 && movimentacao.entradas === 0) {
+    // Apenas saídas = venda
+    return '5102'; // Venda de mercadoria
+  } else if (movimentacao.entradas > 0 && movimentacao.saidas > 0) {
+    // Ambos = movimentação mista
+    return '1102/5102'; // Compra e venda
   } else {
-    return '5102, 6102'; // Venda de mercadoria
+    // Sem movimentação = estoque estático
+    return '0000'; // Sem CFOP específico
   }
 } 

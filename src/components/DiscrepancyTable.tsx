@@ -22,8 +22,9 @@ const DiscrepancyTable = ({ data }: DiscrepancyTableProps) => {
   const getDiscrepancyBadge = (discrepancia: string) => {
     const variants = {
       'Sem Discrepância': 'bg-green-500/20 text-green-400 border-green-500/30',
-      'Compra sem Nota': 'bg-red-500/20 text-red-400 border-red-500/30',
-      'Venda sem Nota': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+      'Estoque Excedente': 'bg-red-500/20 text-red-400 border-red-500/30',
+      'Estoque Faltante': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+      'Divergência Física/Contábil': 'bg-orange-500/20 text-orange-400 border-orange-500/30'
     };
 
     return (

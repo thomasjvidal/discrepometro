@@ -10,8 +10,9 @@ const FilterBar = ({ selectedFilter, onFilterChange }: FilterBarProps) => {
   const filters = [
     { id: 'all', label: 'Todos', color: 'text-dark-300' },
     { id: 'sem-discrepancia', label: 'Sem Discrepância', color: 'text-green-400' },
-    { id: 'compra-sem-nota', label: 'Compra sem Nota', color: 'text-red-400' },
-    { id: 'venda-sem-nota', label: 'Venda sem Nota', color: 'text-yellow-400' }
+    { id: 'estoque-excedente', label: 'Estoque Excedente', color: 'text-red-400' },
+    { id: 'estoque-faltante', label: 'Estoque Faltante', color: 'text-yellow-400' },
+    { id: 'divergencia-fisico-contabil', label: 'Divergência Físico/Contábil', color: 'text-orange-400' }
   ];
 
   return (

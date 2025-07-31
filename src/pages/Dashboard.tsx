@@ -1,7 +1,7 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, TrendingUp, AlertTriangle, CheckCircle, Search, Trophy, Crown } from 'lucide-react';
+import { ArrowLeft, TrendingUp, AlertTriangle, CheckCircle, Search, Trophy, Crown, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,76 +10,53 @@ import DiscrepancyTable from '@/components/DiscrepancyTable';
 import CfopTable from '@/components/CfopTable';
 import StatsCard from '@/components/StatsCard';
 import FilterBar from '@/components/FilterBar';
+import { toast } from '@/hooks/use-toast';
+import { useAnaliseDiscrepancia } from '@/hooks/useAnaliseDiscrepancia';
 
-// Mock data for demonstration
-const mockData = [
-  {
-    id: 1,
-    produto: "Mouse Gamer RGB",
-    codigo: "MGR001",
-    entradas: 150,
-    saidas: 142,
-    estoqueInicial: 50,
-    estoqueFinal: 58,
-    estoqueFinalCalculado: 58,
-    discrepancia: "Sem Discrepância",
-    ranking_vendas: 1
-  },
-  {
-    id: 2,
-    produto: "Teclado Mecânico",
-    codigo: "TM002",
-    entradas: 80,
-    saidas: 95,
-    estoqueInicial: 30,
-    estoqueFinalCalculado: 15,
-    estoqueFinal: 20,
-    discrepancia: "Compra sem Nota",
-    ranking_vendas: 2
-  },
-  {
-    id: 3,
-    produto: "Monitor 24\"",
-    codigo: "MON24",
-    entradas: 45,
-    saidas: 52,
-    estoqueInicial: 15,
-    estoqueFinalCalculado: 8,
-    estoqueFinal: 3,
-    discrepancia: "Venda sem Nota",
-    ranking_vendas: 3
-  },
-  {
-    id: 4,
-    produto: "Headset Gamer",
-    codigo: "HG004",
-    entradas: 120,
-    saidas: 110,
-    estoqueInicial: 25,
-    estoqueFinalCalculado: 35,
-    estoqueFinal: 30,
-    discrepancia: "Sem Discrepância",
-    ranking_vendas: 4
-  },
-  {
-    id: 5,
-    produto: "Webcam HD",
-    codigo: "WH005",
-    entradas: 60,
-    saidas: 55,
-    estoqueInicial: 10,
-    estoqueFinalCalculado: 15,
-    estoqueFinal: 12,
-    discrepancia: "Estoque Faltante",
-    ranking_vendas: 5
-  }
-];
+interface DiscrepanciaReal {
+  id?: number;
+  produto: string;
+  codigo: string;
+  cfop: string;
+  valor_unitario: number;
+  valor_total: number;
+  entradas: number;
+  saidas: number;
+  est_inicial: number;
+  est_final: number;
+  est_calculado: number;
+  est_fisico?: number;
+  est_contabil?: number;
+  discrepancia_tipo: 'Sem Discrepância' | 'Estoque Excedente' | 'Estoque Faltante' | 'Divergência Física/Contábil';
+  discrepancia_valor: number;
+  observacoes: string;
+  ano?: number;
+  user_id?: string;
+  ranking_vendas?: number;
+  created_at?: string;
+}
 
 const Dashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
   
-  const filteredData = mockData.filter(item => {
+  // Usar hook melhorado para buscar dados reais
+  const { discrepancias, loading, error, refetch } = useAnaliseDiscrepancia();
+  const [refreshing, setRefreshing] = useState(false);
+  
+  // Atualizar dados manualmente
+  const atualizarDados = async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+    toast({
+      title: "Dados atualizados",
+      description: "Dashboard atualizado com sucesso!",
+    });
+  };
+  
+  // Filtrar dados baseado na busca e filtro
+  const filteredData = discrepancias.filter(item => {
     const matchesSearch = item.produto.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          item.codigo.toLowerCase().includes(searchTerm.toLowerCase());
     
@@ -87,168 +64,177 @@ const Dashboard = () => {
     
     const discrepancyMap = {
       'sem-discrepancia': 'Sem Discrepância',
-      'compra-sem-nota': 'Compra sem Nota',
-      'venda-sem-nota': 'Venda sem Nota'
+      'estoque-excedente': 'Estoque Excedente',
+      'estoque-faltante': 'Estoque Faltante',
+      'divergencia': 'Divergência Física/Contábil'
     };
     
-    return matchesSearch && item.discrepancia === discrepancyMap[selectedFilter];
+    return matchesSearch && item.discrepancia_tipo === discrepancyMap[selectedFilter as keyof typeof discrepancyMap];
   });
 
-  // Filtrar Top 5 mais vendidos
-  const top5Vendidos = mockData
-    .filter(item => item.ranking_vendas && item.ranking_vendas <= 5)
-    .sort((a, b) => (a.ranking_vendas || 0) - (b.ranking_vendas || 0));
-
+  // Calcular estatísticas
   const stats = {
-    totalProdutos: mockData.length,
-    comDiscrepancia: mockData.filter(item => item.discrepancia !== 'Sem Discrepância').length,
-    conformidade: Math.round((mockData.filter(item => item.discrepancia === 'Sem Discrepância').length / mockData.length) * 100),
-    topVendido: top5Vendidos[0]?.produto || 'N/A'
+    total: discrepancias.length,
+    semDiscrepancia: discrepancias.filter(d => d.discrepancia_tipo === 'Sem Discrepância').length,
+    estoqueExcedente: discrepancias.filter(d => d.discrepancia_tipo === 'Estoque Excedente').length,
+    estoqueFaltante: discrepancias.filter(d => d.discrepancia_tipo === 'Estoque Faltante').length,
+    divergencia: discrepancias.filter(d => d.discrepancia_tipo === 'Divergência Física/Contábil').length
   };
 
+  // Top 5 mais vendidos (baseado em saídas)
+  const top5Vendidos = discrepancias
+    .filter(d => d.saidas > 0)
+    .sort((a, b) => b.saidas - a.saidas)
+    .slice(0, 5);
+
+  // Converter para formato esperado pela tabela
+  const converterParaDiscrepancyItem = (item: DiscrepanciaReal) => ({
+    id: item.id || Math.random(),
+    produto: item.produto,
+    codigo: item.codigo,
+    entradas: item.entradas,
+    saidas: item.saidas,
+    estoqueInicial: item.est_inicial,
+    estoqueFinal: item.est_final,
+    estoqueFinalCalculado: item.est_calculado,
+    discrepancia: item.discrepancia_tipo
+  });
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+              <h2 className="text-xl font-semibold text-gray-700">Carregando análise...</h2>
+              <p className="text-gray-500">Buscando dados reais de processamento</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <AlertTriangle className="h-8 w-8 mx-auto mb-4 text-red-600" />
+              <h2 className="text-xl font-semibold text-gray-700">Erro ao carregar dados</h2>
+              <p className="text-gray-500">{error}</p>
+              <Button onClick={refetch} className="mt-4">
+                Tentar Novamente
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center space-x-4">
             <Link to="/">
-              <Button variant="ghost" size="sm" className="text-dark-400 hover:text-foreground">
-                <ArrowLeft className="w-4 h-4 mr-2" />
+              <Button variant="outline" size="sm">
+                <ArrowLeft className="h-4 w-4 mr-2" />
                 Voltar
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-golden-400 to-golden-600 bg-clip-text text-transparent">
-                Dashboard de Análise Fiscal
-              </h1>
-              <p className="text-dark-400 mt-1">Resultado da análise das discrepâncias encontradas</p>
+              <h1 className="text-3xl font-bold text-gray-900">Dashboard de Discrepâncias</h1>
+              <p className="text-gray-600">Análise fiscal em tempo real</p>
             </div>
           </div>
+          <Button onClick={atualizarDados} disabled={refreshing}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Atualizando...' : 'Atualizar'}
+          </Button>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <StatsCard
-            title="Produtos Analisados"
-            value={stats.totalProdutos.toString()}
-            icon={TrendingUp}
+            title="Total de Produtos"
+            value={stats.total.toString()}
+            icon={Trophy}
             color="blue"
           />
           <StatsCard
-            title="Com Discrepância"
-            value={stats.comDiscrepancia.toString()}
-            icon={AlertTriangle}
-            color="red"
-          />
-          <StatsCard
-            title="Conformidade"
-            value={`${stats.conformidade}%`}
+            title="Sem Discrepância"
+            value={stats.semDiscrepancia.toString()}
             icon={CheckCircle}
             color="green"
           />
           <StatsCard
-            title="Top Vendido"
-            value={stats.topVendido}
-            subtitle={`${top5Vendidos[0]?.saidas || 0} unidades`}
+            title="Estoque Excedente"
+            value={stats.estoqueExcedente.toString()}
+            icon={TrendingUp}
+            color="golden"
+          />
+          <StatsCard
+            title="Estoque Faltante"
+            value={stats.estoqueFaltante.toString()}
+            icon={AlertTriangle}
+            color="red"
+          />
+          <StatsCard
+            title="Divergências"
+            value={stats.divergencia.toString()}
             icon={Crown}
             color="golden"
           />
         </div>
 
-        {/* Top 5 Mais Vendidos Section */}
-        {top5Vendidos.length > 0 && (
-          <Card className="glass-effect p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <Trophy className="w-6 h-6 text-golden-400" />
-              <h2 className="text-xl font-semibold text-foreground">🏆 Top 5 Produtos Mais Vendidos</h2>
-              <Badge variant="secondary" className="bg-golden-500/20 text-golden-400 border-golden-500/30">
-                Análise Prioritária
-              </Badge>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {top5Vendidos.map((item, index) => (
-                <Card key={item.id} className="p-4 bg-dark-800/50 border-dark-700 hover:border-golden-500/30 transition-colors">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                        index === 0 ? 'bg-golden-500 text-dark-900' :
-                        index === 1 ? 'bg-gray-400 text-dark-900' :
-                        index === 2 ? 'bg-amber-600 text-white' :
-                        'bg-dark-600 text-dark-300'
-                      }`}>
-                        {index + 1}
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-foreground">{item.produto}</h3>
-                        <p className="text-sm text-dark-400">{item.codigo}</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-dark-400">Vendas:</span>
-                      <span className="font-medium text-golden-400">{item.saidas} un</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-dark-400">Estoque Final:</span>
-                      <span className="font-medium">{item.estoqueFinal} un</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-dark-400">Status:</span>
-                      <Badge variant={
-                        item.discrepancia === 'Sem Discrepância' ? 'default' :
-                        item.discrepancia === 'Compra sem Nota' ? 'destructive' :
-                        'secondary'
-                      } className="text-xs">
-                        {item.discrepancia}
-                      </Badge>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-            
-            <div className="mt-4 p-3 bg-dark-800/30 rounded-lg border border-dark-700">
-              <p className="text-sm text-dark-400">
-                <strong>💡 Análise Automática:</strong> Estes são os 5 produtos com maior volume de vendas identificados 
-                através dos CFOPs de venda (5xxx, 6xxx, 7xxx). As quantidades foram cruzadas com os inventários físico e contábil.
-              </p>
-            </div>
-          </Card>
-        )}
-
-        {/* CFOP Metrics Table */}
-        <CfopTable />
-
-        {/* Filters and Search */}
-        <Card className="glass-effect p-6">
-          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-            <div className="flex flex-col sm:flex-row gap-4 flex-1">
-              <div className="relative max-w-sm">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-dark-500 w-4 h-4" />
-                <Input
-                  placeholder="Buscar produto ou código..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-dark-800/50 border-dark-700"
-                />
-              </div>
-              <FilterBar selectedFilter={selectedFilter} onFilterChange={setSelectedFilter} />
-            </div>
-            
-            <div className="text-sm text-dark-400">
-              {filteredData.length} de {mockData.length} produtos
+        {/* Search and Filter */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Buscar produtos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
             </div>
           </div>
-        </Card>
+          <FilterBar
+            selectedFilter={selectedFilter}
+            onFilterChange={setSelectedFilter}
+          />
+        </div>
 
-        {/* Results Table */}
-        <Card className="glass-effect">
-          <DiscrepancyTable data={filteredData} />
-        </Card>
+        {/* Main Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Discrepancy Table */}
+          <div className="lg:col-span-2">
+            <Card className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Discrepâncias Encontradas</h2>
+              {filteredData.length > 0 ? (
+                <DiscrepancyTable data={filteredData.map(converterParaDiscrepancyItem)} />
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">Nenhuma discrepância encontrada</p>
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {/* CFOP Metrics */}
+          <div>
+            <Card className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Top 5 Mais Vendidos</h2>
+              <CfopTable />
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,0 +1,31 @@
+# DISCREPÔMETRO - Dependências Python
+# ===================================
+
+# Análise de dados
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Leitura de planilhas
+openpyxl>=3.1.0
+pyxlsb>=1.0.10
+xlrd>=2.0.1
+
+# Leitura de PDFs
+pdfplumber>=0.10.0
+PyPDF2>=3.0.0
+
+# Utilitários
+python-dateutil>=2.8.0
+six>=1.16.0
+
+# Logging e formatação
+colorama>=0.4.6
+tqdm>=4.65.0
+
+# Validação e tipos
+typing-extensions>=4.5.0
+
+# Desenvolvimento (opcional)
+pytest>=7.3.0
+black>=23.0.0
+flake8>=6.0.0 

@@ -46,16 +46,16 @@ app.get('/', (req, res) => {
   res.json({ message: 'Servidor do Discrepômetro funcionando!' });
 });
 
-// Rota para testar a conexão com o Supabase
-app.get('/test-supabase', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('analise_discrepancia').select('*').limit(1);
-    if (error) throw error;
-    res.json({ message: 'Conexão com Supabase OK!', data });
-  } catch (error) {
-    res.status(500).json({ message: 'Erro ao conectar com Supabase', error: error.message });
-  }
-});
+// Rota para testar a conexão com o Supabase (DESABILITADA)
+// app.get('/test-supabase', async (req, res) => {
+//   try {
+//     const { data, error } = await supabase.from('analise_discrepancia').select('*').limit(1);
+//     if (error) throw error;
+//     res.json({ message: 'Conexão com Supabase OK!', data });
+//   } catch (error) {
+//     res.status(500).json({ message: 'Erro ao conectar com Supabase', error: error.message });
+//   }
+// });
 
 // Endpoint para processar arquivos com Discrepômetro Automático
 app.post('/api/process-files', upload.array('files'), async (req, res) => {

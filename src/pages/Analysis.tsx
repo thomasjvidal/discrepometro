@@ -4,6 +4,7 @@ import { Sparkles, Database, FileText, CheckCircle, FileSpreadsheet, Calculator 
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
+import { processarArquivosReais, ProcessamentoProgress } from '@/services/realProcessor';
 
 interface AnalysisProps {
   etapa?: string;
@@ -20,49 +21,127 @@ const Analysis = () => {
   const [etapa, setEtapa] = useState('Iniciando análise...');
   const [mensagem, setMensagem] = useState('Preparando arquivos para processamento');
   const [detalhes, setDetalhes] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [tempoInicio, setTempoInicio] = useState<number | null>(null);
+  const [tempoDecorrido, setTempoDecorrido] = useState(0);
 
-  // Simular processamento real
+  // Processar arquivos reais
   useEffect(() => {
-    const steps = [
-      { etapa: 'Lendo PDFs', mensagem: 'Extraindo dados dos inventários físico e contábil', duracao: 3000 },
-      { etapa: 'Processando Excel', mensagem: 'Lendo movimentações fiscais e CFOPs', duracao: 4000 },
-      { etapa: 'Calculando Discrepâncias', mensagem: 'Cruzando dados e identificando diferenças', duracao: 5000 },
-      { etapa: 'Finalizando', mensagem: 'Salvando resultados no banco de dados', duracao: 2000 }
-    ];
+    const files = location.state?.files;
+    
+    if (!files) {
+      toast({
+        title: "Erro: Nenhum arquivo encontrado",
+        description: "Volte para a página de upload e selecione os arquivos.",
+        variant: "destructive"
+      });
+      setTimeout(() => navigate('/'), 2000);
+      return;
+    }
 
-    let currentStepIndex = 0;
-
-    const processStep = () => {
-      if (currentStepIndex < steps.length) {
-        const step = steps[currentStepIndex];
-        setEtapa(step.etapa);
-        setMensagem(step.mensagem);
-        setCurrentStep(currentStepIndex);
-        setProgresso((currentStepIndex / steps.length) * 100);
-
-        setTimeout(() => {
-          currentStepIndex++;
-          processStep();
-        }, step.duracao);
-      } else {
-        // Processamento concluído
-        setEtapa('Análise Concluída!');
-        setMensagem('Redirecionando para o dashboard...');
-        setProgresso(100);
+    const processarArquivos = async () => {
+      setIsProcessing(true);
+      setTempoInicio(Date.now());
+      
+      // Timer para atualizar tempo decorrido
+      const timerInterval = setInterval(() => {
+        if (tempoInicio) {
+          const decorrido = Math.floor((Date.now() - tempoInicio) / 1000);
+          setTempoDecorrido(decorrido);
+        }
+      }, 1000);
+      
+      // TIMEOUT DE SEGURANÇA (5 minutos)
+      const timeoutId = setTimeout(() => {
+        console.error('⏰ Timeout de segurança atingido (5 minutos)');
+        setEtapa('Timeout - Processamento muito longo');
+        setMensagem('O processamento está demorando muito. Tente com arquivos menores.');
+        setIsProcessing(false);
+        clearInterval(timerInterval);
         
         toast({
-          title: "Análise concluída com sucesso!",
-          description: "Resultados disponíveis no dashboard",
+          title: "Timeout de processamento",
+          description: "O processamento está demorando muito. Tente com arquivos menores ou verifique se os arquivos estão corretos.",
+          variant: "destructive"
+        });
+      }, 5 * 60 * 1000); // 5 minutos
+      
+      try {
+        console.log('🚀 INICIANDO PROCESSAMENTO REAL...');
+        console.log('📁 Arquivos recebidos:', {
+          pdfs: files.pdfs?.map(f => f.name),
+          excels: files.excels?.map(f => f.name),
+          csvs: files.csvs?.map(f => f.name)
+        });
+
+        // Combinar todos os arquivos
+        const todosArquivos = [
+          ...(files.pdfs || []),
+          ...(files.excels || []),
+          ...(files.csvs || [])
+        ];
+
+        // Processar arquivos reais
+        const resultado = await processarArquivosReais(todosArquivos, (progress: ProcessamentoProgress) => {
+          setEtapa(progress.etapa);
+          setMensagem(progress.mensagem);
+          setDetalhes(progress.detalhes || '');
+          setProgresso(progress.progresso);
+          
+          // Atualizar step baseado no progresso
+          if (progress.progresso < 25) setCurrentStep(0);
+          else if (progress.progresso < 50) setCurrentStep(1);
+          else if (progress.progresso < 75) setCurrentStep(2);
+          else setCurrentStep(3);
+        });
+
+        // Limpar timeout se chegou até aqui
+        clearTimeout(timeoutId);
+        clearInterval(timerInterval);
+
+        if (resultado.success) {
+          setEtapa('Análise Concluída!');
+          setMensagem(`Processamento finalizado: ${resultado.totalProcessados} produtos analisados`);
+          setProgresso(100);
+          setCurrentStep(3);
+          
+          toast({
+            title: "Análise concluída com sucesso!",
+            description: `${resultado.totalProcessados} produtos processados em ${Math.round(resultado.tempoProcessamento / 1000)}s`,
+          });
+
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 3000);
+        } else {
+          throw new Error(resultado.message);
+        }
+      } catch (error) {
+        // Limpar timeout em caso de erro
+        clearTimeout(timeoutId);
+        clearInterval(timerInterval);
+        
+        console.error('❌ Erro no processamento:', error);
+        setEtapa('Erro no Processamento');
+        setMensagem('Ocorreu um erro durante a análise');
+        setDetalhes(error instanceof Error ? error.message : 'Erro desconhecido');
+        
+        toast({
+          title: "Erro no processamento",
+          description: error instanceof Error ? error.message : "Erro desconhecido",
+          variant: "destructive"
         });
 
         setTimeout(() => {
-          navigate('/dashboard');
-        }, 2000);
+          navigate('/');
+        }, 5000);
+      } finally {
+        setIsProcessing(false);
       }
     };
 
-    processStep();
-  }, [navigate]);
+    processarArquivos();
+  }, [navigate, location.state]);
 
   const steps = [
     { 
@@ -169,20 +248,28 @@ const Analysis = () => {
               <h4 className="font-medium text-dark-300 mb-2">Detalhes do Processamento</h4>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-dark-500">Arquivos:</span>
-                  <span className="text-dark-300 ml-2">2 PDFs + 1 Excel</span>
+                  <span className="text-dark-500">Status:</span>
+                  <span className="ml-2 text-golden-400 font-medium">
+                    {isProcessing ? 'Processando...' : 'Concluído'}
+                  </span>
                 </div>
                 <div>
-                  <span className="text-dark-500">Tempo estimado:</span>
-                  <span className="text-dark-300 ml-2">~14 segundos</span>
+                  <span className="text-dark-500">Tempo decorrido:</span>
+                  <span className="ml-2 text-golden-400 font-medium">
+                    {tempoDecorrido}s
+                  </span>
+                </div>
+                <div>
+                  <span className="text-dark-500">Progresso:</span>
+                  <span className="ml-2 text-golden-400 font-medium">
+                    {Math.round(progresso)}%
+                  </span>
                 </div>
                 <div>
                   <span className="text-dark-500">Etapa atual:</span>
-                  <span className="text-golden-400 ml-2">{etapa}</span>
-                </div>
-                <div>
-                  <span className="text-dark-500">Status:</span>
-                  <span className="text-green-400 ml-2">Processando</span>
+                  <span className="ml-2 text-golden-400 font-medium">
+                    {currentStep + 1}/4
+                  </span>
                 </div>
               </div>
             </div>

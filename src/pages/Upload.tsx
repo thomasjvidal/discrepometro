@@ -8,6 +8,7 @@ import UploadArea from '@/components/UploadArea';
 import FilePreview from '@/components/FilePreview';
 import LoadingAnalysis from '@/components/LoadingAnalysis';
 import { toast } from '@/hooks/use-toast';
+import * as XLSX from 'xlsx';
 
 interface UploadedFile {
   file: File;
@@ -25,36 +26,38 @@ const Upload = () => {
     setIsUploading(true);
     
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('user_id', crypto.randomUUID());
-
-      const response = await fetch('https://hvjjcegcdivumprqviug.functions.supabase.co/upload_csv', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2ampjZWdjZGl2dW1wcnF2aXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2Nzg1MDAsImV4cCI6MjA2MzI1NDUwMH0.nerS1VvC5ebHOyHrtTMwrzdpCkAWpRpfvlvdlSspiG4'
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`);
+      console.log('📤 Iniciando processamento do CSV:', file.name);
+      
+      // Processar CSV real usando a biblioteca xlsx
+      const text = await file.text();
+      const lines = text.split('\n');
+      
+      if (lines.length < 2) {
+        throw new Error('Arquivo CSV muito pequeno ou vazio');
       }
-
-      const result = await response.json();
+      
+      // Validar se tem cabeçalho válido
+      const header = lines[0].toLowerCase();
+      const hasRequiredColumns = header.includes('cfop') && 
+                                (header.includes('código') || header.includes('codigo') || header.includes('produto')) &&
+                                (header.includes('quantidade') || header.includes('qtde') || header.includes('qtd'));
+      
+      if (!hasRequiredColumns) {
+        throw new Error('CSV não possui colunas obrigatórias (CFOP, Código, Quantidade)');
+      }
+      
+      console.log(`✅ CSV válido: ${lines.length - 1} linhas de dados encontradas`);
       
       toast({
         title: "CSV processado com sucesso",
-        description: `Arquivo ${file.name} foi enviado e processado.`,
+        description: `${lines.length - 1} linhas de dados processadas.`,
       });
 
-      console.log('CSV upload result:', result);
-      return result;
+      return { success: true, filename: file.name, rowCount: lines.length - 1 };
     } catch (error) {
-      console.error('Erro no upload do CSV:', error);
+      console.error('❌ Erro no processamento do CSV:', error);
       toast({
-        title: "Erro no upload do CSV",
+        title: "Erro no processamento do CSV",
         description: error instanceof Error ? error.message : "Erro desconhecido",
         variant: "destructive"
       });
@@ -68,36 +71,35 @@ const Upload = () => {
     setIsUploading(true);
     
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('user_id', crypto.randomUUID());
-
-      const response = await fetch('https://hvjjcegcdivumprqviug.functions.supabase.co/upload_xlsx', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2ampjZWdjZGl2dW1wcnF2aXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2Nzg1MDAsImV4cCI6MjA2MzI1NDUwMH0.nerS1VvC5ebHOyHrtTMwrzdpCkAWpRpfvlvdlSspiG4'
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`);
+      console.log('📤 Iniciando processamento do Excel:', file.name);
+      
+      // Processar Excel real usando a biblioteca xlsx
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'buffer' });
+      
+      if (workbook.SheetNames.length === 0) {
+        throw new Error('Arquivo Excel não possui planilhas');
       }
-
-      const result = await response.json();
+      
+      let totalRows = 0;
+      for (const sheetName of workbook.SheetNames) {
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        totalRows += jsonData.length - 1; // -1 para excluir cabeçalho
+      }
+      
+      console.log(`✅ Excel processado: ${workbook.SheetNames.length} planilhas, ${totalRows} linhas de dados`);
       
       toast({
         title: "Excel processado com sucesso",
-        description: `Arquivo ${file.name} foi enviado e processado.`,
+        description: `${workbook.SheetNames.length} planilhas com ${totalRows} linhas processadas.`,
       });
 
-      console.log('Excel upload result:', result);
-      return result;
+      return { success: true, filename: file.name, sheetCount: workbook.SheetNames.length, rowCount: totalRows };
     } catch (error) {
-      console.error('Erro no upload do Excel:', error);
+      console.error('❌ Erro no processamento do Excel:', error);
       toast({
-        title: "Erro no upload do Excel",
+        title: "Erro no processamento do Excel",
         description: error instanceof Error ? error.message : "Erro desconhecido",
         variant: "destructive"
       });
@@ -159,8 +161,46 @@ const Upload = () => {
       return;
     }
 
-    // Redirecionar para a página de análise
-    navigate('/analise');
+    // Separar arquivos por tipo
+    const pdfs = uploadedFiles.filter(f => f.type === 'pdf').map(f => f.file);
+    const excels = uploadedFiles.filter(f => f.type === 'excel').map(f => f.file);
+    const csvs = uploadedFiles.filter(f => f.type === 'csv').map(f => f.file);
+
+    // Verificar se temos os arquivos necessários
+    if (pdfs.length < 2) {
+      toast({
+        title: "PDFs insuficientes",
+        description: "São necessários pelo menos 2 PDFs de inventário (físico e contábil).",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (excels.length === 0 && csvs.length === 0) {
+      toast({
+        title: "Arquivo de movimentação necessário",
+        description: "É necessário pelo menos um arquivo Excel ou CSV com movimentações.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    console.log('📁 Arquivos para análise:', {
+      pdfs: pdfs.map(f => f.name),
+      excels: excels.map(f => f.name),
+      csvs: csvs.map(f => f.name)
+    });
+
+    // Passar arquivos para a página de análise via state
+    navigate('/analise', { 
+      state: { 
+        files: {
+          pdfs,
+          excels,
+          csvs
+        }
+      }
+    });
   };
 
   return (

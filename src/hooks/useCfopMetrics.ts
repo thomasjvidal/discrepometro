@@ -1,5 +1,6 @@
 
 import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 
 interface CfopMetric {
   id: string;
@@ -19,27 +20,44 @@ export const useCfopMetrics = () => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(
-        'https://hvjjcegcdivumprqviug.supabase.co/rest/v1/cfop_metrics?order=created_at.desc',
-        {
-          method: 'GET',
-          headers: {
-            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2ampjZWdjZGl2dW1wcnF2aXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2Nzg1MDAsImV4cCI6MjA2MzI1NDUwMH0.nerS1VvC5ebHOyHrtTMwrzdpCkAWpRpfvlvdlSspiG4',
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2ampjZWdjZGl2dW1wcnF2aXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2Nzg1MDAsImV4cCI6MjA2MzI1NDUwMH0.nerS1VvC5ebHOyHrtTMwrzdpCkAWpRpfvlvdlSspiG4',
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      console.log('🔍 Buscando métricas CFOP do Supabase...');
 
-      if (!response.ok) {
-        throw new Error(`Erro HTTP: ${response.status}`);
+      // Buscar dados reais do Supabase
+      const { data: cfopData, error: supabaseError } = await supabase
+        .from('cfop_metrics')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (supabaseError) {
+        throw new Error(`Erro Supabase: ${supabaseError.message}`);
       }
 
-      const result = await response.json();
-      setData(result);
+      if (cfopData && cfopData.length > 0) {
+        console.log(`✅ ${cfopData.length} métricas CFOP carregadas do Supabase`);
+        setData(cfopData);
+      } else {
+        console.log('📭 Nenhuma métrica CFOP encontrada no Supabase');
+        setData([]);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro desconhecido');
-      console.error('Erro ao buscar dados de CFOP:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+      setError(errorMessage);
+      console.error('❌ Erro ao buscar dados de CFOP:', err);
+      
+      // Fallback: buscar dados do localStorage se Supabase falhar
+      try {
+        console.log('🔄 Tentando buscar dados do localStorage como fallback...');
+        const dadosSalvos = localStorage.getItem('cfop_metrics');
+        if (dadosSalvos) {
+          const dadosLocal = JSON.parse(dadosSalvos);
+          console.log(`✅ ${dadosLocal.length} métricas CFOP carregadas do localStorage`);
+          setData(dadosLocal);
+          setError(null); // Limpar erro se conseguiu carregar do localStorage
+        }
+      } catch (localError) {
+        console.error('❌ Erro ao carregar dados do localStorage:', localError);
+      }
     } finally {
       setLoading(false);
     }

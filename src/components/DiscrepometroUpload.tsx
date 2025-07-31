@@ -1,62 +1,40 @@
-import { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload as UploadIcon, FileSpreadsheet, FileText, Database } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import UploadArea from '@/components/UploadArea';
-import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-
-const steps = [
-  { label: 'Upload do Arquivo', description: 'Enviando arquivo para o servidor' },
-  { label: 'Processando Dados', description: 'Analisando conteúdo do arquivo' },
-  { label: 'Salvando Resultados', description: 'Armazenando dados no banco' },
-  { label: 'Finalizando', description: 'Preparando visualização' }
-];
+import { UploadIcon, FileSpreadsheet, FileText, Database, X } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import UploadArea from './UploadArea';
+import { processarArquivosReais } from '../services/realProcessor';
 
 interface DiscrepometroUploadProps {
   onFilesUploaded?: (files: File[]) => void;
 }
 
 const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
-  const navigate = useNavigate();
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  // Limpar qualquer cache quando o componente monta
-  useEffect(() => {
-    console.log('🔥 DiscrepometroUpload montado - limpando estado');
-    setFiles([]);
-    setError(null);
-    setProgress(0);
-    setCurrentStep(0);
-    setIsUploading(false);
-  }, []);
+  const steps = [
+    { label: 'Validando arquivos', description: 'Verificando formato e estrutura' },
+    { label: 'Processando dados', description: 'Analisando CFOPs e estoques' },
+    { label: 'Calculando discrepâncias', description: 'Comparando estoques esperados vs reais' },
+    { label: 'Finalizando', description: 'Salvando resultados' }
+  ];
 
   const handleFileUpload = (newFiles: File[]) => {
-    console.log('🔥 handleFileUpload chamado com:', newFiles.map(f => ({name: f.name, size: f.size, type: f.type})));
-    setFiles(newFiles);
+    setFiles(prev => [...prev, ...newFiles]);
     setError(null);
-    console.log('🔥 Estado dos arquivos atualizado para:', newFiles.map(f => f.name));
   };
 
   const handleUpload = async () => {
     if (files.length === 0) {
-      toast.error("Selecione pelo menos um arquivo para upload.");
-      return;
-    }
-    // Nova validação: exigir pelo menos um arquivo Excel
-    const hasExcel = files.some(f => 
-      f.name.endsWith('.xlsx') || 
-      f.name.endsWith('.xls') || 
-      f.name.endsWith('.xlsb')
-    );
-    if (!hasExcel) {
-      toast.error("É obrigatório enviar pelo menos um arquivo Excel (.xlsx, .xls ou .xlsb).");
-      setError("É obrigatório enviar pelo menos um arquivo Excel (.xlsx, .xls ou .xlsb).");
+      toast.error('Selecione pelo menos um arquivo para upload.');
       return;
     }
 
@@ -65,73 +43,53 @@ const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
     setCurrentStep(0);
     setError(null);
 
-    const toastId = toast.loading("Iniciando upload...");
+    const toastId = toast.loading('Iniciando processamento...');
 
     try {
-      // Se tem callback, chama ele ao invés de processar no backend
-      if (onFilesUploaded) {
-        // Simular progresso
-        for (let i = 0; i <= 100; i += 25) {
-          setProgress(i);
-          setCurrentStep(Math.floor(i / 25));
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
+      console.log('🚀 Iniciando processamento de arquivos...');
+      console.log(`📁 Total de arquivos: ${files.length}`);
+      files.forEach(file => console.log(`   - ${file.name}`));
+
+      // Processar arquivos localmente
+      const resultado = await processarArquivosReais(files, (progressInfo) => {
+        console.log(`📊 Progresso: ${progressInfo.etapa} - ${progressInfo.progresso}%`);
+        setProgress(progressInfo.progresso);
         
-        toast.success("Arquivos carregados com sucesso!", { id: toastId });
-        onFilesUploaded(files);
-        setIsUploading(false);
-        return;
-      }
-
-      // Processo original para quando não tem callback
-      for (const file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('user_id', '1'); // TODO: Pegar do contexto de autenticação
-        formData.append('ano', '2024'); // TODO: Permitir seleção do ano
-
-        let endpoint = '';
-        if (file.name.endsWith('.pdf')) {
-          endpoint = 'process_pdf';
-        } else if (file.name.endsWith('.csv')) {
-          endpoint = 'upload_csv';
-        } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.xlsb')) {
-          endpoint = 'upload_xlsx';
-        } else {
-          throw new Error(`Formato de arquivo não suportado: ${file.name}`);
+        // Mapear etapas do processamento para steps do UI
+        if (progressInfo.etapa.includes('Validando')) {
+          setCurrentStep(0);
+        } else if (progressInfo.etapa.includes('Lendo')) {
+          setCurrentStep(1);
+        } else if (progressInfo.etapa.includes('Calculando')) {
+          setCurrentStep(2);
+        } else if (progressInfo.etapa.includes('Salvando')) {
+          setCurrentStep(3);
         }
-
-        setCurrentStep(0);
-        const response = await fetch(`https://hvjjcegcdivumprqviug.functions.supabase.co/${endpoint}`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2ampjZWdjZGl2dW1wcnF2aXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2Nzg1MDAsImV4cCI6MjA2MzI1NDUwMH0.nerS1VvC5ebHOyHrtTMwrzdpCkAWpRpfvlvdlSspiG4'
-        },
       });
 
-      if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || `Erro HTTP: ${response.status}`);
-      }
-
-        const result = await response.json();
-      setProgress(100);
-      setCurrentStep(3);
-
-        toast.success(`Arquivo ${file.name} processado com sucesso!`, { id: toastId });
+      if (resultado.success) {
+        toast.success(`Processamento concluído! ${resultado.discrepancias.length} discrepâncias encontradas.`, { id: toastId });
+        console.log(`✅ Processamento concluído: ${resultado.discrepancias.length} discrepâncias`);
+      } else {
+        throw new Error(resultado.message);
       }
 
       setTimeout(() => {
         setIsUploading(false);
         navigate('/dashboard');
       }, 1200);
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Erro ao processar os arquivos.";
+      console.error('❌ Erro no processamento:', error);
       setError(errorMessage);
       toast.error(errorMessage, { id: toastId });
       setIsUploading(false);
     }
+  };
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -198,15 +156,18 @@ const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
                         </div>
                         <div>
                           <p className="text-sm font-medium text-foreground">{file.name}</p>
-                          <p className="text-xs text-dark-400">
-                            {(file.size / 1024 / 1024).toFixed(2)} MB • {file.type || 'Unknown'}
-                          </p>
+                          <p className="text-xs text-dark-400">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                         </div>
                       </div>
-                      <div className="text-xs text-golden-400">
-                        {(file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.xlsb')) ? 'Movimentações' : 
-                         file.name.endsWith('.pdf') ? 'Inventário' : 'Movimentações'}
-                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeFile(index)}
+                        className="text-dark-400 hover:text-red-400"
+                        disabled={isUploading}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -219,4 +180,5 @@ const DiscrepometroUpload = ({ onFilesUploaded }: DiscrepometroUploadProps) => {
   );
 };
 
+export default DiscrepometroUpload; 
 export default DiscrepometroUpload; 

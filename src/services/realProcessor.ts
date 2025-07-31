@@ -1,7 +1,6 @@
 import { lerPDFReal, PDFInventario, PDFProcessamentoProgress } from '../utils/realPdfReader';
 import { lerExcelReal, ExcelMovimentacao, ExcelProcessamentoProgress } from '../utils/realExcelReader';
 import { calcularDiscrepanciasReais, DiscrepanciaReal } from '../utils/realDiscrepancyCalculator';
-import { supabase } from '../lib/supabase';
 
 export interface ProcessamentoProgress {
   etapa: string;
@@ -24,162 +23,24 @@ export interface ProcessamentoResult {
   tempoProcessamento: number;
 }
 
-// Nova função para identificar os 5 produtos mais vendidos e buscar nos inventários
-async function analisarTop5MaisVendidos(
-  movimentacoes: ExcelMovimentacao[],
-  inventarioFisico: PDFInventario[],
-  inventarioContabil: PDFInventario[],
-  onProgress?: (progress: ProcessamentoProgress) => void
-): Promise<DiscrepanciaReal[]> {
-  console.log('🏆 ANALISANDO TOP 5 PRODUTOS MAIS VENDIDOS...');
+// ETAPA 1: VALIDAR E SEPARAR ARQUIVOS
+function validarESepararArquivos(files: File[]): {
+  pdfs: File[];
+  excels: File[];
+  pdfInicial: File;
+  pdfFinal: File;
+} {
+  console.log('📁 Validando e separando arquivos...');
   
-  if (onProgress) {
-    onProgress({
-      etapa: 'Identificando Top 5 Mais Vendidos',
-      progresso: 60,
-      mensagem: 'Analisando produtos com maior volume de vendas...',
-      detalhes: 'Buscando CFOPs de venda e quantidades'
-    });
-  }
-
-  // 1. Identificar produtos com CFOPs de venda (5xxx, 6xxx, 7xxx)
-  const produtosVenda = new Map<string, {
-    codigo: string;
-    produto: string;
-    totalVendas: number;
-    cfops: string[];
-    entradas: number;
-    est_inicial: number;
-  }>();
-
-  for (const mov of movimentacoes) {
-    const cfopNum = parseInt(mov.cfop);
-    
-    // CFOPs de venda: 5xxx, 6xxx, 7xxx
-    if (cfopNum >= 5000 && cfopNum < 8000) {
-      if (!produtosVenda.has(mov.codigo)) {
-        produtosVenda.set(mov.codigo, {
-          codigo: mov.codigo,
-          produto: mov.produto,
-          totalVendas: 0,
-          cfops: [],
-          entradas: mov.entradas,
-          est_inicial: mov.est_inicial
-        });
-      }
-      
-      const produto = produtosVenda.get(mov.codigo)!;
-      produto.totalVendas += mov.saidas;
-      if (!produto.cfops.includes(mov.cfop)) {
-        produto.cfops.push(mov.cfop);
-      }
-    }
-  }
-
-  console.log(`📊 Produtos com vendas identificados: ${produtosVenda.size}`);
-
-  // 2. Ordenar por volume de vendas e pegar os top 5
-  const top5Vendidos = Array.from(produtosVenda.values())
-    .sort((a, b) => b.totalVendas - a.totalVendas)
-    .slice(0, 5);
-
-  console.log('🏆 TOP 5 PRODUTOS MAIS VENDIDOS:');
-  top5Vendidos.forEach((prod, index) => {
-    console.log(`${index + 1}. ${prod.produto} (${prod.codigo}) - ${prod.totalVendas} vendas`);
-  });
-
-  // 3. Buscar quantidades nos inventários
-  const mapFisico = new Map(inventarioFisico.map(item => [item.codigo, item]));
-  const mapContabil = new Map(inventarioContabil.map(item => [item.codigo, item]));
-
-  const discrepanciasTop5: DiscrepanciaReal[] = [];
-
-  for (const produtoVenda of top5Vendidos) {
-    console.log(`🔍 Analisando ${produtoVenda.produto} (${produtoVenda.codigo})...`);
-    
-    // Buscar nos inventários
-    const fisico = mapFisico.get(produtoVenda.codigo);
-    const contabil = mapContabil.get(produtoVenda.codigo);
-    
-    // Calcular estoque teórico
-    const estoqueCalculado = produtoVenda.est_inicial + produtoVenda.entradas - produtoVenda.totalVendas;
-    
-    // Determinar estoque real (prioridade: físico > contábil)
-    const estoqueReal = fisico?.quantidade || contabil?.quantidade || 0;
-    
-    // Calcular discrepância
-    const discrepanciaValor = Math.abs(estoqueReal - estoqueCalculado);
-    
-    // Determinar tipo de discrepância
-    let tipo: DiscrepanciaReal['discrepancia_tipo'] = 'Sem Discrepância';
-    let observacoes = `TOP 5 MAIS VENDIDO - ${produtoVenda.totalVendas} vendas`;
-    
-    if (fisico && contabil) {
-      const divergenciaFisicoContabil = Math.abs(fisico.quantidade - contabil.quantidade);
-      if (divergenciaFisicoContabil > 0) {
-        tipo = 'Divergência Física/Contábil';
-        observacoes += ` | Físico: ${fisico.quantidade}, Contábil: ${contabil.quantidade}`;
-      }
-    }
-    
-    if (estoqueReal > estoqueCalculado + 1) {
-      tipo = 'Estoque Excedente';
-      observacoes += ` | Possível compra sem nota fiscal`;
-    } else if (estoqueReal < estoqueCalculado - 1) {
-      tipo = 'Estoque Faltante';
-      observacoes += ` | Possível venda sem nota fiscal`;
-    }
-    
-    // Adicionar informações dos CFOPs
-    observacoes += ` | CFOPs: ${produtoVenda.cfops.join(', ')}`;
-    
-    const discrepancia: DiscrepanciaReal = {
-      produto: produtoVenda.produto,
-      codigo: produtoVenda.codigo,
-      cfop: produtoVenda.cfops.join(', '),
-      entradas: produtoVenda.entradas,
-      saidas: produtoVenda.totalVendas,
-      est_inicial: produtoVenda.est_inicial,
-      est_final: estoqueReal,
-      est_calculado: estoqueCalculado,
-      discrepancia_tipo: tipo,
-      discrepancia_valor: discrepanciaValor,
-      valor_total: 0, // Será calculado se necessário
-      observacoes,
-      fonte_inventario_fisico: fisico?.quantidade,
-      fonte_inventario_contabil: contabil?.quantidade,
-      ranking_vendas: top5Vendidos.indexOf(produtoVenda) + 1
-    };
-    
-    discrepanciasTop5.push(discrepancia);
-    
-    console.log(`✅ ${produtoVenda.produto}: ${tipo} (${discrepanciaValor} unidades)`);
-  }
-
-  console.log(`🏆 Análise dos Top 5 concluída: ${discrepanciasTop5.length} produtos analisados`);
-  return discrepanciasTop5;
-}
-
-export async function processarArquivosReais(
-  files: File[],
-  onProgress?: (progress: ProcessamentoProgress) => void
-): Promise<ProcessamentoResult> {
-  const inicio = Date.now();
-  console.log('🚀 Iniciando processamento real de arquivos:', files.map(f => f.name));
-  console.log('📊 Total de arquivos:', files.length);
-  
-  try {
-    // Separar arquivos por tipo
     const pdfs = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
     const excels = files.filter(f => 
       f.name.toLowerCase().endsWith('.xlsx') || 
       f.name.toLowerCase().endsWith('.xls') ||
+    f.name.toLowerCase().endsWith('.xlsb') ||
       f.name.toLowerCase().endsWith('.csv')
     );
     
-    console.log(`📁 Arquivos encontrados: ${pdfs.length} PDFs, ${excels.length} Excel/CSV`);
-    
-    // Validar arquivos mínimos
+  // Validar quantidade mínima
     if (pdfs.length < 2) {
       throw new Error('São necessários pelo menos 2 PDFs (inventário físico e contábil)');
     }
@@ -188,159 +49,66 @@ export async function processarArquivosReais(
       throw new Error('É necessário pelo menos 1 arquivo Excel/CSV com movimentações fiscais');
     }
     
-    // SIMULAÇÃO PARA TESTE - REMOVER DEPOIS
-    console.log('🧪 SIMULANDO PROCESSAMENTO PARA TESTE...');
-    
+  // Identificar anos dos PDFs e validar se são consecutivos
+  const pdfsComAno = pdfs.map(pdf => {
+    const ano = pdf.name.match(/\d{4}/)?.[0];
+    return { file: pdf, ano: ano ? parseInt(ano) : 0 };
+  }).filter(p => p.ano > 0);
+  
+  if (pdfsComAno.length < 2) {
+    throw new Error('Não foi possível identificar anos consecutivos nos PDFs');
+  }
+  
+  // Ordenar por ano e validar se são consecutivos
+  pdfsComAno.sort((a, b) => a.ano - b.ano);
+  
+  if (pdfsComAno[1].ano - pdfsComAno[0].ano !== 1) {
+    throw new Error('Os PDFs devem ser de anos consecutivos (ex: 2023 e 2024)');
+  }
+  
+  const pdfInicial = pdfsComAno[0].file;
+  const pdfFinal = pdfsComAno[1].file;
+  
+  console.log(`✅ PDF Inicial (${pdfsComAno[0].ano}): ${pdfInicial.name}`);
+  console.log(`✅ PDF Final (${pdfsComAno[1].ano}): ${pdfFinal.name}`);
+  
+  return { pdfs, excels, pdfInicial, pdfFinal };
+}
+
+// ETAPA 2: IDENTIFICAR TOP 10 PRODUTOS MAIS VENDIDOS
+async function identificarTop10ProdutosVendidos(
+  excels: File[],
+  onProgress?: (progress: ProcessamentoProgress) => void
+): Promise<{
+  produto: string;
+  codigo: string;
+  totalVendas: number;
+  cfops: string[];
+}[]> {
+  console.log('🏆 Identificando Top 10 produtos mais vendidos...');
+  console.log(`📁 Total de arquivos Excel/CSV: ${excels.length}`);
+  
     if (onProgress) {
       onProgress({
-        etapa: 'Simulando Processamento',
+      etapa: 'Lendo Planilhas',
         progresso: 10,
-        mensagem: 'Iniciando simulação...',
-        detalhes: 'Testando fluxo de processamento'
-      });
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      onProgress({
-        etapa: 'Lendo PDFs',
-        progresso: 30,
-        mensagem: 'Processando inventários...',
-        detalhes: 'Extraindo dados dos PDFs'
-      });
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      onProgress({
-        etapa: 'Processando Excel',
-        progresso: 60,
-        mensagem: 'Lendo movimentações...',
-        detalhes: 'Analisando CFOPs e quantidades'
-      });
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      onProgress({
-        etapa: 'Calculando Discrepâncias',
-        progresso: 90,
-        mensagem: 'Cruzando dados...',
-        detalhes: 'Identificando diferenças'
-      });
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      onProgress({
-        etapa: 'Concluído',
-        progresso: 100,
-        mensagem: 'Processamento finalizado!',
-        detalhes: '5 discrepâncias encontradas'
+        mensagem: 'Identificando CFOPs de venda...',
+        detalhes: 'Buscando produtos mais vendidos'
       });
     }
     
-    // Retornar resultado simulado
-    return {
-      success: true,
-      message: 'Processamento simulado concluído com sucesso',
-      discrepancias: [
-        {
-          codigo: 'TEST001',
-          produto: 'Produto Teste 1',
-          entradas: 100,
-          saidas: 80,
-          estoqueInicial: 50,
-          estoqueFinal: 70,
-          estoqueFinalCalculado: 70,
-          discrepancia: 'Sem Discrepância',
-          ranking_vendas: 1
-        },
-        {
-          codigo: 'TEST002',
-          produto: 'Produto Teste 2',
-          entradas: 80,
-          saidas: 95,
-          estoqueInicial: 30,
-          estoqueFinal: 15,
-          estoqueFinalCalculado: 15,
-          discrepancia: 'Compra sem Nota',
-          ranking_vendas: 2
-        }
-      ],
-      totalProcessados: 2,
-      tempoProcessamento: Date.now() - inicio
-    };
-    
-    // CÓDIGO ORIGINAL COMENTADO PARA TESTE
-    /*
-    // FASE 1: PROCESSAR PDFs
-    let pdfFisico: PDFInventario[] = [];
-    let pdfContabil: PDFInventario[] = [];
-    
-    // Identificar PDF físico vs contábil pelo nome
-    const pdfFisicoFile = pdfs.find(f => 
-      f.name.toLowerCase().includes('fisico') || 
-      f.name.toLowerCase().includes('físico') ||
-      f.name.toLowerCase().includes('inventario')
-    ) || pdfs[0];
-    
-    const pdfContabilFile = pdfs.find(f => 
-      f.name.toLowerCase().includes('contabil') || 
-      f.name.toLowerCase().includes('contábil') ||
-      f.name.toLowerCase().includes('sistema')
-    ) || pdfs[1];
-    
-    // Processar PDF Físico
-    if (onProgress) {
-      onProgress({
-        etapa: 'Lendo PDF Físico',
-        progresso: 10,
-        mensagem: `Processando ${pdfFisicoFile.name}...`,
-        detalhes: 'Extraindo dados do inventário físico'
-      });
-    }
-    
-    pdfFisico = await lerPDFReal(pdfFisicoFile, (progress) => {
-      if (onProgress) {
-        onProgress({
-          etapa: 'Lendo PDF Físico',
-          progresso: 10 + (progress.paginaAtual / progress.totalPaginas) * 15,
-          mensagem: `Página ${progress.paginaAtual}/${progress.totalPaginas}`,
-          detalhes: `${progress.produtosEncontrados} produtos encontrados`,
-          subProgresso: { pdf1: progress }
-        });
-      }
-    });
-    
-    // Processar PDF Contábil
-    if (onProgress) {
-      onProgress({
-        etapa: 'Lendo PDF Contábil',
-        progresso: 25,
-        mensagem: `Processando ${pdfContabilFile.name}...`,
-        detalhes: 'Extraindo dados do inventário contábil'
-      });
-    }
-    
-    pdfContabil = await lerPDFReal(pdfContabilFile, (progress) => {
-      if (onProgress) {
-        onProgress({
-          etapa: 'Lendo PDF Contábil',
-          progresso: 25 + (progress.paginaAtual / progress.totalPaginas) * 15,
-          mensagem: `Página ${progress.paginaAtual}/${progress.totalPaginas}`,
-          detalhes: `${progress.produtosEncontrados} produtos encontrados`,
-          subProgresso: { pdf2: progress }
-        });
-      }
-    });
-    
-    // FASE 2: PROCESSAR EXCELs
     let movimentacoes: ExcelMovimentacao[] = [];
+  let totalMovimentacoes = 0;
+  let cfopsVendaEncontrados = 0;
     
     for (let i = 0; i < excels.length; i++) {
       const excelFile = excels[i];
+    console.log(`📊 Processando arquivo ${i + 1}/${excels.length}: ${excelFile.name}`);
       
       if (onProgress) {
         onProgress({
           etapa: 'Lendo Excel/CSV',
-          progresso: 40 + (i / excels.length) * 10,
+          progresso: 10 + (i / excels.length) * 20,
           mensagem: `Processando ${excelFile.name}...`,
           detalhes: `Arquivo ${i + 1} de ${excels.length}`
         });
@@ -350,103 +118,343 @@ export async function processarArquivosReais(
         if (onProgress) {
           onProgress({
             etapa: 'Lendo Excel/CSV',
-            progresso: 40 + (i / excels.length) * 10 + (progress.planilhaAtual / progress.totalPlanilhas) * 5,
+            progresso: 10 + (i / excels.length) * 20 + (progress.planilhaAtual / progress.totalPlanilhas) * 10,
             mensagem: `Planilha ${progress.planilhaAtual}/${progress.totalPlanilhas}`,
             detalhes: `${progress.movimentacoesEncontradas} movimentações encontradas`,
-            subProgresso: { 
-              excel1: i === 0 ? progress : undefined,
-              excel2: i === 1 ? progress : undefined
-            }
+            subProgresso: { excel1: progress }
           });
         }
       });
       
+    console.log(`✅ Arquivo ${excelFile.name}: ${movimentacoesExcel.length} movimentações extraídas`);
       movimentacoes.push(...movimentacoesExcel);
+    totalMovimentacoes += movimentacoesExcel.length;
+  }
+  
+  console.log(`📊 TOTAL DE MOVIMENTAÇÕES EXTRAÍDAS: ${totalMovimentacoes}`);
+    
+    // Agrupar por produto e somar vendas (CFOPs 5xxx, 6xxx, 7xxx)
+    const vendasPorProduto = new Map<string, {
+      produto: string;
+      codigo: string;
+      totalVendas: number;
+      cfops: string[];
+    }>();
+  
+  console.log('🔍 Analisando CFOPs de venda...');
+    
+    for (const mov of movimentacoes) {
+      const cfopNum = parseInt(mov.cfop);
+      
+      // CFOPs de venda: 5xxx, 6xxx, 7xxx
+      if (cfopNum >= 5000 && cfopNum < 8000) {
+      cfopsVendaEncontrados++;
+        const key = mov.codigo || mov.produto;
+        
+        if (!vendasPorProduto.has(key)) {
+          vendasPorProduto.set(key, {
+            produto: mov.produto,
+            codigo: mov.codigo,
+            totalVendas: 0,
+            cfops: []
+          });
+        }
+        
+        const produto = vendasPorProduto.get(key)!;
+        produto.totalVendas += mov.saidas;
+        if (!produto.cfops.includes(mov.cfop)) {
+          produto.cfops.push(mov.cfop);
+        }
+      
+      // Log detalhado para debug
+      if (cfopsVendaEncontrados <= 10) {
+        console.log(`✅ CFOP ${mov.cfop} (${mov.produto}): ${mov.saidas} vendas`);
+      }
+    }
+  }
+  
+  console.log(`📊 CFOPs de venda encontrados: ${cfopsVendaEncontrados}`);
+  console.log(`📊 Produtos com vendas identificados: ${vendasPorProduto.size}`);
+    
+    // Ordenar por vendas e pegar top 10
+    const top10Vendidos = Array.from(vendasPorProduto.values())
+      .sort((a, b) => b.totalVendas - a.totalVendas)
+      .slice(0, 10);
+    
+    console.log('🏆 TOP 10 PRODUTOS MAIS VENDIDOS:');
+  if (top10Vendidos.length === 0) {
+    console.log('⚠️ NENHUM PRODUTO COM VENDAS ENCONTRADO!');
+    console.log('🔍 Possíveis causas:');
+    console.log('   - Planilhas não contêm CFOPs de venda (5xxx, 6xxx, 7xxx)');
+    console.log('   - Colunas não identificadas corretamente');
+    console.log('   - Dados não estão no formato esperado');
+  } else {
+    top10Vendidos.forEach((prod, index) => {
+      console.log(`${index + 1}. ${prod.produto} (${prod.codigo}) - ${prod.totalVendas} vendas`);
+    });
+  }
+  
+  return top10Vendidos;
+}
+
+// ETAPA 3: LER PDFs E CAPTURAR ESTOQUES
+async function lerPDFsECapturarEstoques(
+  pdfInicial: File,
+  pdfFinal: File,
+  top10Vendidos: { produto: string; codigo: string; totalVendas: number; cfops: string[] }[],
+  onProgress?: (progress: ProcessamentoProgress) => void
+): Promise<{
+  estoquesIniciais: Map<string, number>;
+  estoquesFinais: Map<string, number>;
+}> {
+  console.log('📄 Lendo PDFs e capturando estoques...');
+    
+    // Processar PDF Inicial
+    if (onProgress) {
+      onProgress({
+        etapa: 'Lendo PDF Inicial',
+        progresso: 50,
+        mensagem: `Processando ${pdfInicial.name}...`,
+        detalhes: 'Extraindo estoque inicial dos produtos mais vendidos'
+      });
     }
     
-    // FASE 3: CALCULAR DISCREPÂNCIAS
+    const pdfInicialData = await lerPDFReal(pdfInicial, (progress) => {
+      if (onProgress) {
+        onProgress({
+          etapa: 'Lendo PDF Inicial',
+          progresso: 50 + (progress.paginaAtual / progress.totalPaginas) * 15,
+          mensagem: `Página ${progress.paginaAtual}/${progress.totalPaginas}`,
+          detalhes: `${progress.produtosEncontrados} produtos encontrados`,
+          subProgresso: { pdf1: progress }
+        });
+      }
+    });
+    
+    // Processar PDF Final
+    if (onProgress) {
+      onProgress({
+        etapa: 'Lendo PDF Final',
+        progresso: 65,
+        mensagem: `Processando ${pdfFinal.name}...`,
+        detalhes: 'Extraindo estoque final dos produtos mais vendidos'
+      });
+    }
+    
+    const pdfFinalData = await lerPDFReal(pdfFinal, (progress) => {
+      if (onProgress) {
+        onProgress({
+          etapa: 'Lendo PDF Final',
+          progresso: 65 + (progress.paginaAtual / progress.totalPaginas) * 15,
+          mensagem: `Página ${progress.paginaAtual}/${progress.totalPaginas}`,
+          detalhes: `${progress.produtosEncontrados} produtos encontrados`,
+          subProgresso: { pdf2: progress }
+        });
+      }
+    });
+    
+  // Criar mapas para busca rápida
+  const mapInicial = new Map(pdfInicialData.map(item => [item.codigo || item.produto, item.quantidade]));
+  const mapFinal = new Map(pdfFinalData.map(item => [item.codigo || item.produto, item.quantidade]));
+  
+  return {
+    estoquesIniciais: mapInicial,
+    estoquesFinais: mapFinal
+  };
+}
+
+// ETAPA 4: CALCULAR DISCREPÂNCIAS
+function calcularDiscrepancias(
+  top10Vendidos: { produto: string; codigo: string; totalVendas: number; cfops: string[] }[],
+  estoquesIniciais: Map<string, number>,
+  estoquesFinais: Map<string, number>
+): DiscrepanciaReal[] {
+  console.log('⚖️ Calculando discrepâncias...');
+  console.log(`📊 Produtos para análise: ${top10Vendidos.length}`);
+    
+    const discrepancias: DiscrepanciaReal[] = [];
+    
+    for (const produtoVenda of top10Vendidos) {
+      console.log(`🔍 Analisando ${produtoVenda.produto} (${produtoVenda.codigo})...`);
+      
+      // Buscar estoques nos PDFs
+    const estoqueInicial = estoquesIniciais.get(produtoVenda.codigo) || estoquesIniciais.get(produtoVenda.produto) || 0;
+    const estoqueFinal = estoquesFinais.get(produtoVenda.codigo) || estoquesFinais.get(produtoVenda.produto) || 0;
+    
+    console.log(`📊 ${produtoVenda.produto}:`);
+    console.log(`   - Estoque inicial: ${estoqueInicial}`);
+    console.log(`   - Total vendido: ${produtoVenda.totalVendas}`);
+    console.log(`   - Estoque final: ${estoqueFinal}`);
+    
+    // CORREÇÃO: Calcular estoque esperado conforme documentação
+    // estoque_esperado = estoque_inicial - quantidade_vendida
+      const estoqueEsperado = estoqueInicial - produtoVenda.totalVendas;
+      
+      // Calcular discrepância
+      const diferenca = estoqueFinal - estoqueEsperado;
+      const discrepanciaValor = Math.abs(diferenca);
+      
+    console.log(`   - Estoque esperado: ${estoqueEsperado}`);
+    console.log(`   - Diferença: ${diferenca} (${discrepanciaValor} unidades)`);
+    
+    // Determinar tipo de discrepância conforme documentação
+      let tipo: DiscrepanciaReal['discrepancia_tipo'] = 'Sem Discrepância';
+      let observacoes = '';
+      
+      if (discrepanciaValor > 1) { // Margem de tolerância de 1 unidade
+        if (diferenca < 0) {
+          // Estoque final < esperado = VENDA SEM NOTA
+          tipo = 'Estoque Faltante';
+          observacoes = `VENDA SEM NOTA FISCAL: ${Math.abs(diferenca)} unidades a menos. `;
+        } else {
+          // Estoque final > esperado = COMPRA SEM NOTA
+          tipo = 'Estoque Excedente';
+          observacoes = `COMPRA SEM NOTA FISCAL: ${diferenca} unidades a mais. `;
+        }
+      }
+      
+      // Adicionar informações detalhadas
+      observacoes += `Estoque inicial: ${estoqueInicial}, Estoque final: ${estoqueFinal}. `;
+      observacoes += `Total vendido: ${produtoVenda.totalVendas}. `;
+      observacoes += `Estoque esperado: ${estoqueEsperado}. `;
+      observacoes += `CFOPs de venda: ${produtoVenda.cfops.join(', ')}.`;
+      
+      const discrepancia: DiscrepanciaReal = {
+        produto: produtoVenda.produto,
+        codigo: produtoVenda.codigo,
+        cfop: produtoVenda.cfops.join(', '),
+        valor_unitario: 0, // Será calculado depois se necessário
+        valor_total: 0, // Será calculado depois se necessário
+        entradas: 0, // Não temos entradas, apenas vendas
+        saidas: produtoVenda.totalVendas,
+        est_inicial: estoqueInicial,
+        est_final: estoqueFinal,
+        est_calculado: estoqueEsperado,
+        est_fisico: estoqueFinal, // Assumindo que é o estoque físico
+        est_contabil: estoqueFinal, // Assumindo que é o estoque contábil
+        discrepancia_tipo: tipo,
+        discrepancia_valor: discrepanciaValor,
+        observacoes: observacoes,
+        ano: new Date().getFullYear(),
+        user_id: 'sistema_real',
+        ranking_vendas: discrepancias.length + 1
+      };
+      
+      discrepancias.push(discrepancia);
+      console.log(`✅ ${produtoVenda.produto}: ${tipo} (${discrepanciaValor} unidades)`);
+    }
+    
+    console.log(`✅ Análise concluída: ${discrepancias.length} produtos do top 10 analisados`);
+    
+  // Resumo das discrepâncias
+  const produtosComErro = discrepancias.filter(d => d.discrepancia_tipo !== 'Sem Discrepância');
+  const produtosOK = discrepancias.filter(d => d.discrepancia_tipo === 'Sem Discrepância');
+  
+  console.log(`📊 RESUMO:`);
+  console.log(`   - Produtos OK: ${produtosOK.length}`);
+  console.log(`   - Produtos com ERRO: ${produtosComErro.length}`);
+  
+  return discrepancias;
+}
+
+// ETAPA 5: SALVAR RESULTADOS LOCALMENTE (SEM SUPABASE)
+async function salvarResultadosLocalmente(discrepancias: DiscrepanciaReal[]): Promise<void> {
+  console.log('💾 Salvando resultados localmente...');
+  
+  try {
+    // Salvar em localStorage para persistência local
+    const dadosParaSalvar = discrepancias.map(d => ({
+      produto: d.produto,
+      codigo: d.codigo,
+      cfop: d.cfop,
+      entradas: d.entradas,
+      saidas: d.saidas,
+      est_inicial: d.est_inicial,
+      est_final: d.est_final,
+      est_calculado: d.est_calculado,
+      discrepancia_tipo: d.discrepancia_tipo,
+      discrepancia_valor: d.discrepancia_valor,
+      valor_total: d.valor_total,
+      observacoes: d.observacoes,
+      created_at: new Date().toISOString()
+    }));
+    
+    // Salvar no localStorage
+    localStorage.setItem('analise_discrepancia', JSON.stringify(dadosParaSalvar));
+    
+    console.log(`✅ ${dadosParaSalvar.length} resultados salvos localmente`);
+    
+  } catch (error) {
+    console.error('❌ Erro ao salvar localmente:', error);
+    throw error;
+  }
+}
+
+// FUNÇÃO PRINCIPAL - PROCESSAMENTO COMPLETO
+export async function processarArquivosReais(
+  files: File[],
+  onProgress?: (progress: ProcessamentoProgress) => void
+): Promise<ProcessamentoResult> {
+  const inicio = Date.now();
+  console.log('🚀 Iniciando processamento real de arquivos:', files.map(f => f.name));
+  console.log('📊 Total de arquivos:', files.length);
+  
+  try {
+    // ETAPA 1: VALIDAR E SEPARAR ARQUIVOS
+    const { pdfs, excels, pdfInicial, pdfFinal } = validarESepararArquivos(files);
+    
+    // ETAPA 2: IDENTIFICAR TOP 10 PRODUTOS MAIS VENDIDOS
+    const top10Vendidos = await identificarTop10ProdutosVendidos(excels, onProgress);
+    
+    // ETAPA 3: LER PDFs E CAPTURAR ESTOQUES
+    const { estoquesIniciais, estoquesFinais } = await lerPDFsECapturarEstoques(
+      pdfInicial, 
+      pdfFinal, 
+      top10Vendidos, 
+      onProgress
+    );
+    
+    // ETAPA 4: CALCULAR DISCREPÂNCIAS
     if (onProgress) {
       onProgress({
         etapa: 'Calculando Discrepâncias',
-        progresso: 50,
-        mensagem: 'Cruzando dados dos inventários...',
-        detalhes: 'Identificando diferenças entre físico e contábil'
-      });
-    }
-    
-    const discrepancias = await calcularDiscrepanciasReais(
-      movimentacoes,
-      pdfFisico,
-      pdfContabil,
-      (progress) => {
-        if (onProgress) {
-          onProgress({
-            etapa: 'Calculando Discrepâncias',
-            progresso: 50 + progress * 0.3,
-            mensagem: 'Analisando produtos...',
-            detalhes: 'Comparando quantidades e CFOPs'
-          });
-        }
-      }
-    );
-    
-    // FASE 4: ANALISAR TOP 5 MAIS VENDIDOS
-    if (onProgress) {
-      onProgress({
-        etapa: 'Analisando Top 5 Mais Vendidos',
         progresso: 80,
-        mensagem: 'Identificando produtos prioritários...',
-        detalhes: 'Buscando CFOPs de venda e volumes'
+        mensagem: 'Analisando discrepâncias dos produtos mais vendidos...',
+        detalhes: 'Comparando estoque esperado vs real'
       });
     }
     
-    const discrepanciasTop5 = await analisarTop5MaisVendidos(
-      movimentacoes,
-      pdfFisico,
-      pdfContabil,
-      (progress) => {
-        if (onProgress) {
-          onProgress({
-            etapa: 'Analisando Top 5 Mais Vendidos',
-            progresso: 80 + progress.progresso * 0.1,
-            mensagem: progress.mensagem,
-            detalhes: progress.detalhes
-          });
-        }
-      }
-    );
+    const discrepancias = calcularDiscrepancias(top10Vendidos, estoquesIniciais, estoquesFinais);
     
-    // FASE 5: SALVAR NO SUPABASE
+    // ETAPA 5: SALVAR RESULTADOS LOCALMENTE
     if (onProgress) {
       onProgress({
         etapa: 'Salvando Resultados',
         progresso: 90,
-        mensagem: 'Armazenando dados no banco...',
-        detalhes: 'Salvando discrepâncias encontradas'
+        mensagem: 'Salvando resultados localmente...',
+        detalhes: `${discrepancias.length} discrepâncias encontradas`
       });
     }
     
-    const todasDiscrepancias = [...discrepancias, ...discrepanciasTop5];
+    await salvarResultadosLocalmente(discrepancias);
     
-    await salvarDiscrepanciasNoSupabase(todasDiscrepancias);
-    
+    // ETAPA 6: CONCLUIR PROCESSAMENTO
     if (onProgress) {
       onProgress({
         etapa: 'Concluído',
         progresso: 100,
         mensagem: 'Processamento finalizado!',
-        detalhes: `${todasDiscrepancias.length} discrepâncias encontradas`
+        detalhes: `${discrepancias.length} discrepâncias analisadas`
       });
     }
     
     return {
       success: true,
-      message: `Processamento concluído com sucesso. ${todasDiscrepancias.length} discrepâncias encontradas.`,
-      discrepancias: todasDiscrepancias,
-      totalProcessados: todasDiscrepancias.length,
+      message: `Processamento real concluído: ${discrepancias.length} discrepâncias encontradas`,
+      discrepancias: discrepancias,
+      totalProcessados: discrepancias.length,
       tempoProcessamento: Date.now() - inicio
     };
-    */
     
   } catch (error: any) {
     console.error('❌ Erro no processamento real:', error);
@@ -461,82 +469,11 @@ export async function processarArquivosReais(
   }
 }
 
-async function salvarDiscrepanciasNoSupabase(discrepancias: DiscrepanciaReal[]): Promise<void> {
-  console.log('💾 Salvando discrepâncias no Supabase...');
-  
-  try {
-    // Limpar dados anteriores
-    const { error: deleteError } = await supabase
-      .from('analise_discrepancia')
-      .delete()
-      .neq('id', 0); // Deletar todos
-    
-    if (deleteError) {
-      console.warn('⚠️ Erro ao limpar dados anteriores:', deleteError);
-    }
-    
-    // Inserir novos dados em lotes
-    const batchSize = 50;
-    for (let i = 0; i < discrepancias.length; i += batchSize) {
-      const batch = discrepancias.slice(i, i + batchSize);
-      
-      const { error } = await supabase
-        .from('analise_discrepancia')
-        .insert(batch.map(d => ({
-          produto: d.produto,
-          codigo: d.codigo,
-          cfop: d.cfop,
-          entradas: d.entradas,
-          saidas: d.saidas,
-          est_inicial: d.est_inicial,
-          est_final: d.est_final,
-          est_calculado: d.est_calculado,
-          discrepancia_tipo: d.discrepancia_tipo,
-          discrepancia_valor: d.discrepancia_valor,
-          valor_total: d.valor_total,
-          observacoes: d.observacoes,
-          created_at: new Date().toISOString()
-        })));
-      
-      if (error) {
-        console.error('❌ Erro ao salvar lote:', error);
-        throw error;
-      }
-      
-      console.log(`✅ Lote ${Math.floor(i / batchSize) + 1} salvo: ${batch.length} registros`);
-    }
-    
-    console.log(`✅ Total de ${discrepancias.length} discrepâncias salvas no Supabase`);
-    
-  } catch (error) {
-    console.error('❌ Erro ao salvar no Supabase:', error);
-    throw error;
-  }
-}
-
 // Função para processar arquivos grandes em chunks
 export async function processarArquivosGrandes(
   files: File[],
   onProgress?: (progress: ProcessamentoProgress) => void
 ): Promise<ProcessamentoResult> {
-  console.log('🚀 Iniciando processamento de arquivos grandes...');
-  
-  // Para arquivos muito grandes, usar processamento em chunks
-  const arquivosGrandes = files.filter(f => f.size > 10 * 1024 * 1024); // > 10MB
-  
-  if (arquivosGrandes.length > 0) {
-    console.log(`📁 ${arquivosGrandes.length} arquivos grandes detectados, usando processamento em chunks`);
-    
-    if (onProgress) {
-      onProgress({
-        etapa: 'Processamento em Chunks',
-        progresso: 5,
-        mensagem: 'Arquivos grandes detectados, processando em partes...',
-        detalhes: `${arquivosGrandes.length} arquivos > 10MB`
-      });
-    }
-  }
-  
-  // Usar o processamento normal (que já tem suporte a chunks internamente)
+  // Implementação para arquivos muito grandes
   return processarArquivosReais(files, onProgress);
 } 
