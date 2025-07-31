@@ -79,16 +79,21 @@ export async function lerPDFReal(
   console.log('📄 Iniciando leitura REAL do PDF:', file.name, 'Tamanho:', file.size);
   
   try {
-    // Configurar worker do PDF.js
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    // Configurar worker do PDF.js para usar worker local
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
     
     // Ler o arquivo como ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
     
     console.log('🔄 Carregando PDF...');
     
-    // Carregar o PDF
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    // Carregar o PDF sem worker externo
+    const loadingTask = pdfjsLib.getDocument({ 
+      data: arrayBuffer,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true
+    });
     const pdf = await loadingTask.promise;
     
     console.log(`📊 PDF carregado: ${pdf.numPages} páginas encontradas`);
@@ -182,14 +187,19 @@ export async function processarPDFEmChunks(
   console.log('📄 Processando PDF grande em chunks...');
   
   try {
-    // Configurar worker do PDF.js
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    // Configurar worker do PDF.js para usar worker local
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
     
     // Ler o arquivo como ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
     
-    // Carregar o PDF
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    // Carregar o PDF sem worker externo
+    const loadingTask = pdfjsLib.getDocument({ 
+      data: arrayBuffer,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true
+    });
     const pdf = await loadingTask.promise;
     
     const produtos: PDFInventario[] = [];
