@@ -1,129 +1,231 @@
 const express = require('express');
-const fileUpload = require('express-fileupload');
-const cors = require('cors');
-const { createClient } = require('@supabase/supabase-js');
-const dotenv = require('dotenv');
 const multer = require('multer');
+const cors = require('cors');
+const pdfParse = require('pdf-parse');
+const XLSX = require('xlsx');
 const path = require('path');
-const fs = require('fs');
-const { spawn } = require('child_process');
-
-dotenv.config();
-
-// Configurar Supabase
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 const app = express();
-app.use(express.json());
-app.use(fileUpload());
+const PORT = process.env.PORT || 3001;
+
+// Middleware
 app.use(cors());
-app.use(express.static('dist'));
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'dist')));
 
-// Configurar multer para upload de arquivos
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = 'uploads';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Manter nome original para compatibilidade com script Python
-    cb(null, file.originalname);
-  }
-});
-
+// Configuração do Multer para upload de arquivos
+const storage = multer.memoryStorage();
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limite
-});
-
-// Rota de teste para verificar se o servidor está funcionando
-app.get('/', (req, res) => {
-  res.json({ message: 'Servidor do Discrepômetro funcionando!' });
-});
-
-// Rota para testar a conexão com o Supabase (DESABILITADA)
-// app.get('/test-supabase', async (req, res) => {
-//   try {
-//     const { data, error } = await supabase.from('analise_discrepancia').select('*').limit(1);
-//     if (error) throw error;
-//     res.json({ message: 'Conexão com Supabase OK!', data });
-//   } catch (error) {
-//     res.status(500).json({ message: 'Erro ao conectar com Supabase', error: error.message });
-//   }
-// });
-
-// Endpoint para processar arquivos com Discrepômetro Automático
-app.post('/api/process-files', upload.array('files'), async (req, res) => {
-  console.log('🚀 Recebidos arquivos para processamento:', req.files?.length || 0);
-  
-  if (!req.files || req.files.length === 0) {
-    return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB
+    files: 10
   }
-  
-  // Log dos arquivos recebidos
-  req.files.forEach(file => {
-    console.log(`📄 ${file.originalname} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
-  });
-  
+});
+
+// Função para extrair dados do PDF
+async function extrairDadosPDF(buffer) {
   try {
-    // Usar o novo sistema automático Node.js
-    const { DiscrepometroAuto } = require('./scripts/discrepometro_auto.js');
-    const discrepometro = new DiscrepometroAuto();
+    const data = await pdfParse(buffer);
+    const texto = data.text;
     
-    // Executar análise no diretório de uploads
-    const uploadsDir = path.join(__dirname, 'uploads');
-    const resultado = await discrepometro.executarAnalise(uploadsDir);
+    console.log('📄 PDF processado:', data.info?.Title || 'Sem título');
+    console.log('📝 Texto extraído:', texto.length, 'caracteres');
     
-    // Limpar arquivos temporários
-    req.files.forEach(file => {
-      fs.unlink(file.path, (err) => {
-        if (err) console.log('Erro ao limpar arquivo:', err);
+    // Extrair produtos do texto do PDF
+    const produtos = {};
+    const linhas = texto.split('\n');
+    
+    for (const linha of linhas) {
+      // Padrão para encontrar código e quantidade
+      const match = linha.match(/(\d{4,})\s+.*?\s+(\d+(?:[.,]\d+)?)/);
+      if (match) {
+        const codigo = match[1];
+        const quantidade = parseFloat(match[2].replace(',', '.'));
+        
+        if (codigo && !isNaN(quantidade) && quantidade > 0) {
+          produtos[codigo] = quantidade;
+        }
+      }
+    }
+    
+    console.log('🏷️ Produtos encontrados no PDF:', Object.keys(produtos).length);
+    return produtos;
+    
+  } catch (error) {
+    console.error('❌ Erro ao processar PDF:', error);
+    throw new Error(`Falha no processamento do PDF: ${error.message}`);
+  }
+}
+
+// Função para extrair Top 10 produtos do Excel
+function extrairTop10Produtos(buffer) {
+  try {
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    
+    console.log('📊 Excel processado:', data.length, 'linhas');
+    
+    // Encontrar cabeçalho
+    let headerRow = 0;
+    for (let i = 0; i < Math.min(10, data.length); i++) {
+      const row = data[i];
+      if (row && row.some(cell => 
+        typeof cell === 'string' && 
+        (cell.toLowerCase().includes('cfop') || 
+         cell.toLowerCase().includes('código') || 
+         cell.toLowerCase().includes('quantidade'))
+      )) {
+        headerRow = i;
+        break;
+      }
+    }
+    
+    console.log('📋 Cabeçalho encontrado na linha:', headerRow);
+    
+    // Mapear colunas
+    const header = data[headerRow];
+    let cfopIndex = -1, codigoIndex = -1, quantidadeIndex = -1;
+    
+    for (let i = 0; i < header.length; i++) {
+      const cell = String(header[i]).toLowerCase();
+      if (cell.includes('cfop')) cfopIndex = i;
+      else if (cell.includes('código') || cell.includes('codigo')) codigoIndex = i;
+      else if (cell.includes('quantidade') || cell.includes('qtd')) quantidadeIndex = i;
+    }
+    
+    console.log('📍 Índices mapeados:', { cfopIndex, codigoIndex, quantidadeIndex });
+    
+    // Processar vendas
+    const vendas = {};
+    
+    for (let i = headerRow + 1; i < data.length; i++) {
+      const row = data[i];
+      if (!row || row.length < Math.max(cfopIndex, codigoIndex, quantidadeIndex)) continue;
+      
+      const cfop = String(row[cfopIndex] || '');
+      const codigo = String(row[codigoIndex] || '');
+      const quantidade = parseFloat(row[quantidadeIndex] || 0);
+      
+      // Filtrar apenas vendas (CFOP 5xxx, 6xxx, 7xxx)
+      if (cfop.match(/^[567]\d{3}$/) && codigo && !isNaN(quantidade) && quantidade > 0) {
+        if (!vendas[codigo]) vendas[codigo] = 0;
+        vendas[codigo] += quantidade;
+      }
+    }
+    
+    // Top 10 produtos mais vendidos
+    const top10 = Object.entries(vendas)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 10)
+      .map(([codigo, quantidade]) => ({ codigo, quantidade }));
+    
+    console.log('🏆 Top 10 produtos:', top10);
+    return top10;
+    
+  } catch (error) {
+    console.error('❌ Erro ao processar Excel:', error);
+    throw new Error(`Falha no processamento do Excel: ${error.message}`);
+  }
+}
+
+// Endpoint principal para análise
+app.post('/api/analisar', upload.fields([
+  { name: 'excel', maxCount: 1 },
+  { name: 'pdfInicial', maxCount: 1 },
+  { name: 'pdfFinal', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    console.log('🚀 Iniciando análise de discrepâncias...');
+    
+    const files = req.files;
+    
+    if (!files.excel || !files.pdfInicial || !files.pdfFinal) {
+      return res.status(400).json({
+        success: false,
+        message: 'São necessários: 1 Excel + 2 PDFs'
       });
-    });
+    }
+    
+    // 1. Extrair Top 10 produtos do Excel
+    console.log('📊 Processando Excel...');
+    const top10Produtos = extrairTop10Produtos(files.excel[0].buffer);
+    const codigosProdutos = top10Produtos.map(p => p.codigo);
+    
+    // 2. Processar PDF inicial
+    console.log('📄 Processando PDF inicial...');
+    const estoqueInicial = await extrairDadosPDF(files.pdfInicial[0].buffer);
+    
+    // 3. Processar PDF final
+    console.log('📄 Processando PDF final...');
+    const estoqueFinal = await extrairDadosPDF(files.pdfFinal[0].buffer);
+    
+    // 4. Calcular discrepâncias
+    console.log('🧮 Calculando discrepâncias...');
+    const resultados = [];
+    
+    for (const produto of top10Produtos) {
+      const codigo = produto.codigo;
+      const vendido = produto.quantidade;
+      const inicial = estoqueInicial[codigo] || 0;
+      const final = estoqueFinal[codigo] || 0;
+      
+      const esperado = inicial - vendido;
+      const diferenca = final - esperado;
+      
+      let status = 'OK';
+      let tipo = 'NORMAL';
+      
+      if (Math.abs(diferenca) > 0.01) {
+        status = 'ERRO';
+        tipo = diferenca < 0 ? 'VENDA_SEM_NOTA' : 'COMPRA_SEM_NOTA';
+      }
+      
+      resultados.push({
+        codigo,
+        produto: `PRODUTO_${codigo}`,
+        vendido,
+        estoque_inicial: inicial,
+        estoque_final: final,
+        estoque_esperado: esperado,
+        diferenca,
+        status,
+        tipo_discrepancia: tipo
+      });
+    }
+    
+    console.log('✅ Análise concluída:', resultados.length, 'produtos processados');
     
     res.json({
       success: true,
-      message: 'Processamento automático concluído com sucesso',
-      resultado: resultado,
-      timestamp: new Date().toISOString()
+      resultados,
+      total_processados: resultados.length,
+      tempo_processamento: Date.now() - req.startTime
     });
     
   } catch (error) {
-    console.error('❌ Erro no processamento automático:', error);
-    res.status(500).json({ 
-      error: 'Erro no processamento automático', 
-      message: error.message 
+    console.error('❌ Erro na análise:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
     });
   }
 });
 
-// Endpoint de status/teste
-app.get('/api/status', (req, res) => {
-  res.json({ 
-    status: 'online', 
-    timestamp: new Date().toISOString(),
-    version: '2.0 - Python Integration'
-  });
+// Middleware para medir tempo
+app.use((req, res, next) => {
+  req.startTime = Date.now();
+  next();
 });
 
-// Rota de teste para verificar se o servidor está funcionando
-app.get('/test', (req, res) => {
-  res.json({ 
-    message: 'Backend do Discrepômetro funcionando!',
-    timestamp: new Date().toISOString()
-  });
+// Rota para servir o frontend
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log(`📊 Discrepômetro 3.0 - Sistema Automático Ativo`);
-  console.log(`⚡ Processamento: TypeScript/Node.js com streaming`);
-  console.log(`📋 Capacidade: Milhões de linhas + PDFs grandes`);
-  console.log(`🔗 Proxy configurado para Vite em http://localhost:8080`);
+  console.log(`📊 Endpoint de análise: http://localhost:${PORT}/api/analisar`);
 }); 
