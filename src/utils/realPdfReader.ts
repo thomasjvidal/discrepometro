@@ -1,4 +1,4 @@
-import { PDFExtract } from 'pdf.js-extract';
+import * as pdfjsLib from 'pdfjs-dist';
 
 export interface InventarioPDF {
   ano: number;
@@ -79,52 +79,55 @@ export async function lerPDFReal(
   console.log('📄 Iniciando leitura REAL do PDF:', file.name, 'Tamanho:', file.size);
   
   try {
-    const pdfExtract = new PDFExtract();
-    const options = {}; // Opções padrão
+    // Configurar worker do PDF.js
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
     
-    // Converter File para Buffer
+    // Ler o arquivo como ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
     
-    console.log('🔄 Extraindo dados do PDF...');
+    console.log('🔄 Carregando PDF...');
     
-    // Extrair dados reais do PDF
-    const data = await pdfExtract.extractBuffer(buffer, options);
+    // Carregar o PDF
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
     
-    console.log(`📊 PDF extraído: ${data.pages.length} páginas encontradas`);
+    console.log(`📊 PDF carregado: ${pdf.numPages} páginas encontradas`);
     
     let textoCompleto = '';
-    let linhasProcessadas = 0;
+    let paginasProcessadas = 0;
     
     // Processar cada página
-    for (let paginaIndex = 0; paginaIndex < data.pages.length; paginaIndex++) {
-      const pagina = data.pages[paginaIndex];
+    for (let paginaIndex = 1; paginaIndex <= pdf.numPages; paginaIndex++) {
+      const pagina = await pdf.getPage(paginaIndex);
       
       // Atualizar progresso
       if (onProgress) {
         onProgress({
           etapa: 'Lendo PDF',
-          mensagem: `Processando página ${paginaIndex + 1}`,
-          progresso: (paginaIndex / data.pages.length) * 100,
-          detalhes: `Página ${paginaIndex + 1} de ${data.pages.length}`
+          mensagem: `Processando página ${paginaIndex}`,
+          progresso: (paginaIndex / pdf.numPages) * 100,
+          detalhes: `Página ${paginaIndex} de ${pdf.numPages}`
         });
       }
       
-      console.log(`📄 Processando página ${paginaIndex + 1}: ${pagina.content.length} elementos`);
+      console.log(`📄 Processando página ${paginaIndex}...`);
       
       // Extrair texto da página
-      const textoPagina = pagina.content.map(item => item.str).join(' ');
-      textoCompleto += textoPagina + '\n';
+      const textContent = await pagina.getTextContent();
+      const textoPagina = textContent.items
+        .map((item: any) => item.str)
+        .join(' ');
       
-      linhasProcessadas += pagina.content.length;
+      textoCompleto += textoPagina + '\n';
+      paginasProcessadas++;
       
       // PAUSA ASSÍNCRONA PARA NÃO TRAVAR A INTERFACE
-      if (paginaIndex % 5 === 0) {
-        await new Promise(resolve => setTimeout(resolve, 5)); // 5ms de pausa
+      if (paginaIndex % 3 === 0) {
+        await new Promise(resolve => setTimeout(resolve, 10)); // 10ms de pausa
       }
     }
     
-    console.log(`✅ PDF processado REALMENTE: ${linhasProcessadas} elementos extraídos`);
+    console.log(`✅ PDF processado REALMENTE: ${paginasProcessadas} páginas extraídas`);
     console.log(`📝 Texto extraído: ${textoCompleto.length} caracteres`);
     
     return textoCompleto;
@@ -179,55 +182,59 @@ export async function processarPDFEmChunks(
   console.log('📄 Processando PDF grande em chunks...');
   
   try {
-    const pdfExtract = new PDFExtract();
-    const options = {};
+    // Configurar worker do PDF.js
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
     
+    // Ler o arquivo como ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
     
-    const data = await pdfExtract.extractBuffer(buffer, options);
+    // Carregar o PDF
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
     
     const produtos: PDFInventario[] = [];
     let linhasProcessadas = 0;
     
-    for (let paginaIndex = 0; paginaIndex < data.pages.length; paginaIndex++) {
-      const pagina = data.pages[paginaIndex];
+    for (let paginaIndex = 1; paginaIndex <= pdf.numPages; paginaIndex++) {
+      const pagina = await pdf.getPage(paginaIndex);
       
       // Atualizar progresso
       if (onProgress) {
         onProgress({
           etapa: 'Processando PDF',
-          mensagem: `Página ${paginaIndex + 1}`,
-          progresso: (paginaIndex / data.pages.length) * 100,
-          detalhes: `Página ${paginaIndex + 1} de ${data.pages.length}`
+          mensagem: `Página ${paginaIndex}`,
+          progresso: (paginaIndex / pdf.numPages) * 100,
+          detalhes: `Página ${paginaIndex} de ${pdf.numPages}`
         });
       }
       
+      // Extrair texto da página
+      const textContent = await pagina.getTextContent();
+      const linhas = textContent.items
+        .map((item: any) => item.str)
+        .join(' ')
+        .split('\n');
+      
       // Processar linhas em chunks
-      for (let i = 0; i < pagina.content.length; i += chunkSize) {
-        const chunk = pagina.content.slice(i, i + chunkSize);
+      for (let i = 0; i < linhas.length; i += chunkSize) {
+        const chunk = linhas.slice(i, i + chunkSize);
         
-        for (const content of chunk) {
-          const texto = content.str.trim();
+        for (const linha of chunk) {
+          const texto = linha.trim();
           linhasProcessadas++;
           
           const produto = extrairProdutoDaLinhaReal(texto);
           if (produto) {
             produtos.push({
               ...produto,
-              pagina: paginaIndex + 1
+              pagina: paginaIndex
             });
           }
         }
         
-        // Atualizar progresso
-        if (onProgress) {
-          onProgress({
-            etapa: 'Processando PDF',
-            mensagem: `Página ${paginaIndex + 1}`,
-            progresso: (paginaIndex / data.pages.length) * 100,
-            detalhes: `Página ${paginaIndex + 1} de ${data.pages.length}`
-          });
+        // PAUSA ASSÍNCRONA PARA NÃO TRAVAR A INTERFACE
+        if (i % (chunkSize * 2) === 0) {
+          await new Promise(resolve => setTimeout(resolve, 5));
         }
       }
     }
