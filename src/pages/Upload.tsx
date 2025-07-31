@@ -124,22 +124,8 @@ const Upload = () => {
     
     setUploadedFiles(prev => [...prev, ...newFiles]);
     
-    // Processar arquivos CSV e Excel automaticamente
-    for (const fileData of newFiles) {
-      if (fileData.type === 'csv') {
-        try {
-          await uploadCsvToSupabase(fileData.file);
-        } catch (error) {
-          // Erro já tratado na função uploadCsvToSupabase
-        }
-      } else if (fileData.type === 'excel') {
-        try {
-          await uploadExcelToSupabase(fileData.file);
-        } catch (error) {
-          // Erro já tratado na função uploadExcelToSupabase
-        }
-      }
-    }
+    // NÃO PROCESSAR AQUI - APENAS ADICIONAR À LISTA
+    console.log('📁 Arquivos adicionados:', newFiles.map(f => f.file.name));
     
     toast({
       title: "Arquivos carregados",

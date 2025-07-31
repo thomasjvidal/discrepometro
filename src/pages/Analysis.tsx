@@ -110,6 +110,7 @@ const Analysis = () => {
             description: `${resultado.totalProcessados} produtos processados em ${Math.round(resultado.tempoProcessamento / 1000)}s`,
           });
 
+          // Redirecionar para dashboard após sucesso
           setTimeout(() => {
             navigate('/dashboard');
           }, 3000);
@@ -132,9 +133,10 @@ const Analysis = () => {
           variant: "destructive"
         });
 
-        setTimeout(() => {
-          navigate('/');
-        }, 5000);
+        // NÃO REDIRECIONAR AUTOMATICAMENTE - DEIXAR USUÁRIO DECIDIR
+        // setTimeout(() => {
+        //   navigate('/');
+        // }, 5000);
       } finally {
         setIsProcessing(false);
       }
