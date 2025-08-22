@@ -1,204 +1,186 @@
-# 🚀 Discrepômetro - Radar Fiscal Inteligente
+# 📊 Discrepômetro – Análise Fiscal Inteligente
 
-Sistema automatizado para detectar discrepâncias entre inventário declarado e movimentações fiscais, identificando inconsistências e calculando os produtos mais vendidos.
+## 📍 Contexto
 
-## 📋 Visão Geral
+O **discrepômetro** é um módulo que cruza dados de **vendas (planilhas CSV/Excel)** com dados de **estoque (inventários em PDF)** para identificar discrepâncias entre **o que foi vendido** e **o que deveria restar em estoque**.
 
-O **Discrepômetro** é um sistema inteligente que:
-
-1. **Processa 4 arquivos** (2 PDFs de inventário + 2 planilhas de movimentação)
-2. **Identifica os produtos mais vendidos** baseado em CFOPs de venda
-3. **Compara vendas com inventários** para detectar discrepâncias
-4. **Gera relatório visual** com estatísticas e alertas
-
-## 🎯 Objetivo
-
-Automatizar a análise fiscal comparativa entre anos diferentes, identificando:
-- ✅ Produtos vendidos sem estoque suficiente
-- ✅ Discrepâncias entre inventário físico e contábil
-- ✅ Top produtos mais vendidos
-- ✅ Alertas de conformidade fiscal
-
-## 🚀 Instalação
-
-### 1. Clonar o repositório
-```bash
-git clone <url-do-repositorio>
-cd discrepometro
-```
-
-### 2. Instalar dependências Python
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Instalar dependências Node.js
-```bash
-npm install
-```
-
-### 4. Configurar Supabase
-- Copiar as credenciais do Supabase para `src/lib/supabase.ts`
-- Executar as migrações do banco de dados
-
-## 🧪 Teste Rápido
-
-### 1. Executar análise
-```bash
-python discrepometro_final.py
-```
-
-### 2. Iniciar interface web
-```bash
-npm run dev
-```
-
-### 3. Acessar aplicação
-```
-http://localhost:5173
-```
-
-## 📊 Uso via CLI
-
-### Análise com arquivos próprios
-```bash
-python discrepometro_final.py
-```
-
-### Interface web
-```bash
-npm run dev
-```
-
-## 🔧 Estrutura do Projeto
-
-```
-discrepometro/
-├── discrepometro_final.py    # Script principal Python
-├── requirements.txt          # Dependências Python
-├── package.json             # Dependências Node.js
-├── src/                     # Frontend React
-│   ├── App.tsx             # Aplicação principal
-│   ├── pages/              # Páginas da aplicação
-│   ├── components/         # Componentes React
-│   ├── services/           # Serviços de processamento
-│   └── utils/              # Utilitários
-├── supabase/               # Configurações do banco
-└── README.md               # Este arquivo
-```
-
-## 📈 Lógica de Funcionamento
-
-### Etapa 1: Processamento de Planilhas
-- ✅ Carrega CSV/Excel com milhões de linhas
-- ✅ Filtra CFOPs de venda: `5101`, `5102`, `6101`, `6102`, `5405`, `6405`
-- ✅ Agrupa por produto e soma quantidades
-- ✅ Identifica top produtos mais vendidos
-
-### Etapa 2: Processamento de PDFs
-- ✅ Extrai tabelas dos PDFs de inventário
-- ✅ Detecta automaticamente ano (2023/2024)
-- ✅ Busca produtos específicos nos inventários
-- ✅ Extrai quantidade e valor final
-
-### Etapa 3: Cálculo de Discrepâncias
-- ✅ Compara quantidade vendida vs estoque final
-- ✅ Calcula diferença: `Estoque_2024 - Estoque_2023 - Vendas`
-- ✅ Classifica status: **OK** / **ALERTA** / **CRÍTICO**
-
-## �� Formato de Saída
-
-### JSON de Relatório
-```json
-{
-  "timestamp": "2024-01-15T10:30:00",
-  "estatisticas": {
-    "total_produtos": 10,
-    "criticos": 3,
-    "alertas": 2,
-    "ok": 5,
-    "percentual_critico": 30.0,
-    "valor_total_vendido": 25000.00,
-    "quantidade_total_vendida": 5000
-  },
-  "discrepancias": [
-    {
-      "produto": "Caneta Azul BIC",
-      "quantidade_vendida": 500,
-      "quantidade_inventario": 200,
-      "diferenca": -300,
-      "status": "CRÍTICO",
-      "codigo": "CAN001",
-      "valor_total_vendido": 2500.00,
-      "cfops_utilizados": ["5101", "6101"]
-    }
-  ]
-}
-```
-
-## 🎯 Status de Discrepância
-
-### ✅ OK
-- Diferença pequena (≤ 10% da quantidade vendida)
-- Produto encontrado em ambos os inventários
-
-### ⚠️ ALERTA
-- Diferença moderada (> 10% da quantidade vendida)
-- Sobra muito estoque
-
-### 🚨 CRÍTICO
-- Produto não encontrado no inventário
-- Vendeu mais do que tinha em estoque
-- Diferença muito grande
-
-## 🔧 Configuração Avançada
-
-### CFOPs de Venda
-Editar em `src/utils/realDiscrepancyCalculator.ts`:
-```typescript
-// CFOPs de venda: 5xxx, 6xxx, 7xxx
-if (cfopNum >= 5000 && cfopNum < 8000) {
-```
-
-### Limite de Discrepância
-Editar em `src/utils/realDiscrepancyCalculator.ts`:
-```typescript
-// Se a diferença é muito grande (mais de 10% da quantidade vendida)
-if (abs(diferenca_esperada) > (quantidade_vendida * 0.1):
-```
-
-## 🐛 Troubleshooting
-
-### Erro: "Arquivos não encontrados"
-- ✅ Verificar se os 4 arquivos estão no diretório
-- ✅ Verificar nomes dos arquivos (deve conter ano)
-- ✅ Usar dados de exemplo como referência
-
-### Erro: "Nenhuma tabela encontrada no PDF"
-- ✅ Verificar se o PDF contém tabelas
-- ✅ Verificar se o PDF não está corrompido
-- ✅ Testar com PDFs de exemplo
-
-### Erro: "Colunas não encontradas"
-- ✅ Verificar se as planilhas têm as colunas necessárias
-- ✅ Verificar nomes das colunas (produto, quantidade, cfop)
-- ✅ Usar dados de exemplo como referência
-
-## 📞 Suporte
-
-Para dúvidas ou problemas:
-1. Verificar logs em `discrepometro.log`
-2. Executar com dados de exemplo primeiro
-3. Verificar formato dos arquivos de entrada
-
-## 🚀 Próximos Passos
-
-- [ ] Integração com FastAPI
-- [ ] Interface web completa
-- [ ] Processamento em lote
-- [ ] Relatórios em PDF
-- [ ] Integração com bancos de dados
+Ele só executa sua rotina completa na tela **`analysis`**.
 
 ---
 
-**Desenvolvido com ❤️ para automatizar análises fiscais**
+## 🔎 Fluxo de Execução
+
+### **1. Leitura da Planilha**
+
+* Carrega arquivos CSV/Excel (mesmo com milhões de linhas).
+* Filtra **apenas CFOPs de venda**:
+
+  * `5101`, `5102`, `6101`, `6102`, `5405`, `6405`
+* Agrupa por produto e soma as quantidades.
+* Identifica automaticamente os **10 produtos mais vendidos**.
+
+---
+
+### **2. Identificação dos Inventários (PDFs)**
+
+* Detecta automaticamente **quais arquivos PDF são inventários**.
+* Pelo nome, identifica o ano do inventário (ex.: `2023`, `2024`).
+
+  * Sempre começa pelo mais antigo (ex.: `2023`) e depois lê o mais recente (ex.: `2024`).
+  * Deve ser tolerante a datas aleatórias e sequenciais (não só 2023 → 2024).
+* Extrai tabelas de estoque dos PDFs.
+* Busca apenas os produtos encontrados na etapa anterior (top 10 vendidos).
+* Extrai **quantidade** e, se disponível, **valor final**.
+
+---
+
+### **3. Cálculo das Discrepâncias**
+
+* Fórmula base:
+
+  ```
+  Discrepância = Estoque_AnoMaisRecente - Estoque_AnoAnterior - Vendas
+  ```
+* Classificação:
+
+  * **OK** → quando a discrepância é nula ou dentro da margem.
+  * **ALERTA** → quando existe diferença significativa.
+  * **CRÍTICO** → discrepância grave, estoque não bate.
+
+---
+
+## ✅ Resumo de Lógica (Checklist)
+
+* [x] Lê planilha (CSV/Excel).
+* [x] Filtra CFOPs de venda.
+* [x] Agrupa e encontra top 10 produtos mais vendidos.
+* [x] Detecta e processa inventários (PDFs).
+* [x] Extrai quantidade/valor dos produtos nos inventários.
+* [x] Compara estoque e vendas.
+* [x] Classifica status final (**OK/ALERTA/CRÍTICO**).
+
+---
+
+## 🚦 Observação Importante
+
+* O software **só executa toda essa rotina na tela `analysis`**.
+* Esta é a **lógica oficial de pensamento do discrepômetro**.
+
+---
+
+## 🏗️ Estrutura do Projeto (Organizada)
+
+```
+discrepometro/
+├── 📁 frontend/              # Interface React/TypeScript
+│   ├── src/                  # Código fonte React
+│   ├── public/               # Arquivos estáticos
+│   ├── package.json          # Dependências frontend
+│   └── vite.config.ts        # Configuração Vite
+├── 📁 backend/               # Lógica Python + Servidor Node.js
+│   ├── core/                 # Lógica principal Python
+│   │   ├── discrepancia.py   # Cálculo de discrepâncias
+│   │   └── utils.py          # Utilitários
+│   ├── readers/              # Leitores de arquivos Python
+│   │   ├── pdf_reader.py     # Leitor de PDFs
+│   │   └── planilha_reader.py # Leitor de planilhas
+│   ├── main.py               # Script Python principal
+│   ├── server.cjs            # Servidor Express.js
+│   ├── requirements.txt      # Dependências Python
+│   ├── package.json          # Dependências Node.js
+│   ├── resultados/           # Pasta de resultados
+│   └── venv/                 # Ambiente virtual Python
+├── 📁 supabase/              # Configurações do banco
+├── package.json               # Gerenciador principal
+└── README.md                  # Este arquivo
+```
+
+---
+
+## 🚀 Como Executar
+
+### **Instalação Completa (Recomendado)**
+```bash
+npm run install:all
+```
+
+### **Executar Tudo (Frontend + Backend)**
+```bash
+npm run dev
+```
+
+### **Executar Apenas Backend**
+```bash
+npm run backend:dev
+```
+
+### **Executar Apenas Frontend**
+```bash
+npm run frontend:dev
+```
+
+---
+
+## 📋 Dependências
+
+### **Backend (Python)**
+- `pandas` - Processamento de dados
+- `pdfplumber` - Leitura de PDFs
+- `openpyxl` - Leitura de Excel
+
+### **Backend (Node.js)**
+- `express` - Servidor web
+- `multer` - Upload de arquivos
+- `cors` - Cross-origin requests
+- `pdf-parse` - Processamento de PDFs
+- `xlsx` - Processamento de Excel
+
+### **Frontend (React)**
+- `react` - Framework principal
+- `react-router-dom` - Roteamento
+- `tailwindcss` - Estilização
+
+---
+
+## 🔧 Configuração
+
+1. **Instalar dependências:** `npm run install:all`
+2. **Configurar ambiente Python** (se necessário)
+3. **Executar:** `npm run dev`
+4. **Acessar:** Frontend na porta 5173, Backend na porta 3001
+
+---
+
+## 📊 Funcionalidades
+
+- **Upload de arquivos** (Excel/CSV + PDFs)
+- **Processamento automático** de dados fiscais
+- **Identificação inteligente** de inventários
+- **Cálculo automático** de discrepâncias
+- **Interface visual** para resultados
+- **Exportação** de relatórios
+
+---
+
+## 🎯 Casos de Uso
+
+- **Auditoria fiscal** de empresas
+- **Controle de estoque** automatizado
+- **Identificação** de inconsistências contábeis
+- **Relatórios** para órgãos fiscais
+- **Análise** de movimentações comerciais
+
+---
+
+## 🚀 Desenvolvimento
+
+### **Estrutura Modular**
+- **Frontend:** Interface React independente
+- **Backend:** API Node.js + Lógica Python
+- **Separação clara** de responsabilidades
+
+### **Scripts Disponíveis**
+- `npm run dev` - Desenvolvimento completo
+- `npm run backend:dev` - Apenas backend
+- `npm run frontend:dev` - Apenas frontend
+- `npm run install:all` - Instalação completa
