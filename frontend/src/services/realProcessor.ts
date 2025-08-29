@@ -1,4 +1,4 @@
-import { lerExcelReal } from '@/utils/realExcelReader';
+import { processarArquivosPython } from './pythonProcessor';
 
 export interface ProcessamentoProgress {
   etapa: string;
@@ -14,10 +14,10 @@ export interface ProcessamentoResultado {
   tempoProcessamento?: number;
 }
 
-// Função para enviar arquivos para o backend
-async function enviarParaBackend(files: File[], onProgress?: (progress: ProcessamentoProgress) => void): Promise<ProcessamentoResultado> {
+// Função para enviar arquivos para o backend Python
+async function enviarParaBackendPython(files: File[], onProgress?: (progress: ProcessamentoProgress) => void): Promise<ProcessamentoResultado> {
   try {
-    console.log('🚀 Enviando arquivos para backend...');
+    console.log('🐍 Enviando arquivos para backend Python...');
     
     // Separar arquivos por tipo
     const excel = files.find(f => f.name.toLowerCase().includes('.xls') || f.name.toLowerCase().includes('.csv'));
@@ -35,12 +35,6 @@ async function enviarParaBackend(files: File[], onProgress?: (progress: Processa
       throw new Error('PDFs devem conter "2023/inicial" e "2024/final" no nome');
     }
     
-    // Criar FormData
-    const formData = new FormData();
-    formData.append('excel', excel);
-    formData.append('pdfInicial', pdfInicial);
-    formData.append('pdfFinal', pdfFinal);
-    
     console.log('📁 Arquivos preparados:', {
       excel: excel.name,
       pdfInicial: pdfInicial.name,
@@ -50,42 +44,36 @@ async function enviarParaBackend(files: File[], onProgress?: (progress: Processa
     // Atualizar progresso
     if (onProgress) {
       onProgress({
-        etapa: 'Enviando para Backend',
-        mensagem: 'Conectando com servidor...',
+        etapa: 'Enviando para Backend Python',
+        mensagem: 'Conectando com servidor Python...',
         progresso: 10
       });
     }
     
-    // Enviar para backend
-    const response = await fetch('http://localhost:3001/api/analisar', {
-      method: 'POST',
-      body: formData
-    });
+    // Enviar para backend Python usando o serviço existente
+    const resultado = await processarArquivosPython(
+      [excel, pdfInicial, pdfFinal], 
+      10, // max_produtos
+      1.0 // tolerancia
+    );
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Erro do servidor: ${response.status} - ${errorText}`);
-    }
-    
-    const resultado = await response.json();
-    
-    if (resultado.success) {
+    if (resultado.success && resultado.data) {
       // Salvar resultados no localStorage
-      localStorage.setItem('analise_discrepancia', JSON.stringify(resultado.resultados));
+      localStorage.setItem('analise_discrepancia', JSON.stringify(resultado.data.resultados));
       
-      console.log('✅ Análise concluída pelo backend:', resultado);
+      console.log('✅ Análise concluída pelo backend Python:', resultado);
       
       return {
         success: true,
-        totalProcessados: resultado.total_processados,
-        tempoProcessamento: resultado.tempo_processamento
+        totalProcessados: resultado.data.metadata.total_produtos,
+        tempoProcessamento: Date.now() // Simplificado por enquanto
       };
     } else {
-      throw new Error(resultado.message || 'Erro desconhecido do backend');
+      throw new Error(resultado.message || 'Erro desconhecido do backend Python');
     }
     
   } catch (error) {
-    console.error('❌ Erro ao enviar para backend:', error);
+    console.error('❌ Erro ao enviar para backend Python:', error);
     throw error;
   }
 }
@@ -95,7 +83,7 @@ export async function processarArquivosReais(
   files: File[],
   onProgress?: (progress: ProcessamentoProgress) => void
 ): Promise<ProcessamentoResultado> {
-  console.log('🚀 INICIANDO PROCESSAMENTO REAL...');
+  console.log('🚀 INICIANDO PROCESSAMENTO REAL COM PYTHON...');
   console.log('📁 Arquivos recebidos:', files);
   
   try {
@@ -108,8 +96,8 @@ export async function processarArquivosReais(
       });
     }
     
-    // Enviar para backend
-    const resultado = await enviarParaBackend(files, onProgress);
+    // Enviar para backend Python
+    const resultado = await enviarParaBackendPython(files, onProgress);
     
     return resultado;
     

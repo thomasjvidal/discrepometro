@@ -1,186 +1,142 @@
-# 📊 Discrepômetro – Análise Fiscal Inteligente
+# 🚀 DISCREPÔMETRO - Análise Fiscal Inteligente
 
-## 📍 Contexto
+Sistema automatizado para análise de discrepâncias de estoque com base em planilhas de vendas e inventários em PDF.
 
-O **discrepômetro** é um módulo que cruza dados de **vendas (planilhas CSV/Excel)** com dados de **estoque (inventários em PDF)** para identificar discrepâncias entre **o que foi vendido** e **o que deveria restar em estoque**.
+## 📋 Funcionalidades
 
-Ele só executa sua rotina completa na tela **`analysis`**.
+- **Leitura automática** de planilhas CSV/Excel com milhões de linhas
+- **Filtragem inteligente** de CFOPs de venda (5101, 5102, 6101, 6102, 5405, 6405)
+- **Identificação automática** dos 10 produtos mais vendidos
+- **Processamento de PDFs** de inventário com detecção automática de anos
+- **Cálculo preciso** de discrepâncias de estoque
+- **Classificação automática** em OK/ALERTA/CRÍTICO
+- **Interface web moderna** para upload e análise
 
----
-
-## 🔎 Fluxo de Execução
-
-### **1. Leitura da Planilha**
-
-* Carrega arquivos CSV/Excel (mesmo com milhões de linhas).
-* Filtra **apenas CFOPs de venda**:
-
-  * `5101`, `5102`, `6101`, `6102`, `5405`, `6405`
-* Agrupa por produto e soma as quantidades.
-* Identifica automaticamente os **10 produtos mais vendidos**.
-
----
-
-### **2. Identificação dos Inventários (PDFs)**
-
-* Detecta automaticamente **quais arquivos PDF são inventários**.
-* Pelo nome, identifica o ano do inventário (ex.: `2023`, `2024`).
-
-  * Sempre começa pelo mais antigo (ex.: `2023`) e depois lê o mais recente (ex.: `2024`).
-  * Deve ser tolerante a datas aleatórias e sequenciais (não só 2023 → 2024).
-* Extrai tabelas de estoque dos PDFs.
-* Busca apenas os produtos encontrados na etapa anterior (top 10 vendidos).
-* Extrai **quantidade** e, se disponível, **valor final**.
-
----
-
-### **3. Cálculo das Discrepâncias**
-
-* Fórmula base:
-
-  ```
-  Discrepância = Estoque_AnoMaisRecente - Estoque_AnoAnterior - Vendas
-  ```
-* Classificação:
-
-  * **OK** → quando a discrepância é nula ou dentro da margem.
-  * **ALERTA** → quando existe diferença significativa.
-  * **CRÍTICO** → discrepância grave, estoque não bate.
-
----
-
-## ✅ Resumo de Lógica (Checklist)
-
-* [x] Lê planilha (CSV/Excel).
-* [x] Filtra CFOPs de venda.
-* [x] Agrupa e encontra top 10 produtos mais vendidos.
-* [x] Detecta e processa inventários (PDFs).
-* [x] Extrai quantidade/valor dos produtos nos inventários.
-* [x] Compara estoque e vendas.
-* [x] Classifica status final (**OK/ALERTA/CRÍTICO**).
-
----
-
-## 🚦 Observação Importante
-
-* O software **só executa toda essa rotina na tela `analysis`**.
-* Esta é a **lógica oficial de pensamento do discrepômetro**.
-
----
-
-## 🏗️ Estrutura do Projeto (Organizada)
+## 🏗️ Arquitetura
 
 ```
 discrepometro/
-├── 📁 frontend/              # Interface React/TypeScript
-│   ├── src/                  # Código fonte React
-│   ├── public/               # Arquivos estáticos
-│   ├── package.json          # Dependências frontend
-│   └── vite.config.ts        # Configuração Vite
-├── 📁 backend/               # Lógica Python + Servidor Node.js
-│   ├── core/                 # Lógica principal Python
-│   │   ├── discrepancia.py   # Cálculo de discrepâncias
-│   │   └── utils.py          # Utilitários
-│   ├── readers/              # Leitores de arquivos Python
-│   │   ├── pdf_reader.py     # Leitor de PDFs
-│   │   └── planilha_reader.py # Leitor de planilhas
-│   ├── main.py               # Script Python principal
-│   ├── server.cjs            # Servidor Express.js
-│   ├── requirements.txt      # Dependências Python
-│   ├── package.json          # Dependências Node.js
-│   ├── resultados/           # Pasta de resultados
-│   └── venv/                 # Ambiente virtual Python
-├── 📁 supabase/              # Configurações do banco
-├── package.json               # Gerenciador principal
-└── README.md                  # Este arquivo
+├── frontend/           # Interface React/TypeScript
+├── backend/            # Backend Python + Node.js
+│   ├── core/          # Lógica principal do discrepômetro
+│   ├── readers/       # Leitura de planilhas e PDFs
+│   ├── server/        # Servidor Node.js para API
+│   └── utils/         # Utilitários Python
+├── supabase/          # Banco de dados e funções
+└── docs/              # Documentação
 ```
 
----
+## ⚙️ Como Funciona
 
-## 🚀 Como Executar
+### 1. **Leitura da Planilha**
+- Carrega arquivos CSV/Excel
+- Filtra apenas CFOPs de venda
+- Agrupa por produto e soma quantidades
+- Identifica os 10 produtos mais vendidos
 
-### **Instalação Completa (Recomendado)**
+### 2. **Processamento de PDFs**
+- Detecta automaticamente o ano do inventário
+- Lê primeiro o PDF mais antigo, depois o mais recente
+- Extrai tabelas de estoque
+- Busca produtos específicos nos inventários
+
+### 3. **Cálculo de Discrepâncias**
+- Fórmula: `Discrepância = Estoque_2024 - Estoque_2023 - Vendas`
+- Classificação:
+  - **OK** → Discrepância nula ou dentro da margem
+  - **ALERTA** → Diferença significativa
+  - **CRÍTICO** → Discrepância grave
+
+## 🚀 Instalação
+
+### Pré-requisitos
+- Python 3.9+
+- Node.js 18+
+- npm ou yarn
+
+### Backend Python
 ```bash
-npm run install:all
+cd backend
+pip install -r requirements.txt
 ```
 
-### **Executar Tudo (Frontend + Backend)**
+### Backend Node.js
 ```bash
+cd backend
+npm install
+npm start
+```
+
+### Frontend
+```bash
+cd frontend
+npm install
 npm run dev
 ```
 
-### **Executar Apenas Backend**
-```bash
-npm run backend:dev
+## 📁 Estrutura de Arquivos
+
+### Planilha de Vendas
+- **Formato**: CSV ou Excel
+- **Colunas obrigatórias**: `Data`, `Produto`, `CFOP`, `Quantidade`, `Valor`
+- **CFOPs válidos**: 5101, 5102, 6101, 6102, 5405, 6405
+
+### PDFs de Inventário
+- **Formato**: PDF com tabelas
+- **Nomenclatura**: `inventario_2023.pdf`, `estoque_final_2024.pdf`
+- **Colunas**: `Produto`, `Quantidade`, `Valor Total`
+
+## 🔧 Uso
+
+### Via Interface Web
+1. Acesse a tela "Analysis"
+2. Faça upload da planilha de vendas
+3. Faça upload dos 2 PDFs de inventário
+4. Aguarde a análise automática
+5. Visualize os resultados
+
+### Via Python
+```python
+from backend.discrepometro import DiscrepometroOrchestrator
+
+discrepometro = DiscrepometroOrchestrator()
+resultado = discrepometro.executar_analise_completa()
 ```
 
-### **Executar Apenas Frontend**
-```bash
-npm run frontend:dev
-```
+## 📊 Exemplo de Resultado
+
+| Produto     | Qtd 2023 | Qtd 2024 | Vendido | Discrepância | Status     |
+| ----------- | -------- | -------- | ------- | ------------ | ---------- |
+| Pneu Aro 14 | 10       | 0        | 8       | -2           | ⚠️ ALERTA  |
+| Bateria 60A | 5        | 20       | 15      | 0            | ✅ OK       |
+| Óleo 20W50  | 30       | 45       | 5       | +10          | 🔥 CRÍTICO |
+
+## 🛠️ Tecnologias
+
+- **Frontend**: React, TypeScript, Tailwind CSS
+- **Backend Python**: Pandas, PDFPlumber, FastAPI
+- **Backend Node.js**: Express, Multer, CORS
+- **Banco de Dados**: Supabase (PostgreSQL)
+- **Deploy**: Vercel, Railway, Heroku
+
+## 📝 Licença
+
+MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+## 🤝 Contribuição
+
+1. Fork o projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
+5. Abra um Pull Request
+
+## 📞 Suporte
+
+- **Email**: suporte@discrepometro.com
+- **Documentação**: [docs.discrepometro.com](https://docs.discrepometro.com)
+- **Issues**: [GitHub Issues](https://github.com/discrepometro/issues)
 
 ---
 
-## 📋 Dependências
-
-### **Backend (Python)**
-- `pandas` - Processamento de dados
-- `pdfplumber` - Leitura de PDFs
-- `openpyxl` - Leitura de Excel
-
-### **Backend (Node.js)**
-- `express` - Servidor web
-- `multer` - Upload de arquivos
-- `cors` - Cross-origin requests
-- `pdf-parse` - Processamento de PDFs
-- `xlsx` - Processamento de Excel
-
-### **Frontend (React)**
-- `react` - Framework principal
-- `react-router-dom` - Roteamento
-- `tailwindcss` - Estilização
-
----
-
-## 🔧 Configuração
-
-1. **Instalar dependências:** `npm run install:all`
-2. **Configurar ambiente Python** (se necessário)
-3. **Executar:** `npm run dev`
-4. **Acessar:** Frontend na porta 5173, Backend na porta 3001
-
----
-
-## 📊 Funcionalidades
-
-- **Upload de arquivos** (Excel/CSV + PDFs)
-- **Processamento automático** de dados fiscais
-- **Identificação inteligente** de inventários
-- **Cálculo automático** de discrepâncias
-- **Interface visual** para resultados
-- **Exportação** de relatórios
-
----
-
-## 🎯 Casos de Uso
-
-- **Auditoria fiscal** de empresas
-- **Controle de estoque** automatizado
-- **Identificação** de inconsistências contábeis
-- **Relatórios** para órgãos fiscais
-- **Análise** de movimentações comerciais
-
----
-
-## 🚀 Desenvolvimento
-
-### **Estrutura Modular**
-- **Frontend:** Interface React independente
-- **Backend:** API Node.js + Lógica Python
-- **Separação clara** de responsabilidades
-
-### **Scripts Disponíveis**
-- `npm run dev` - Desenvolvimento completo
-- `npm run backend:dev` - Apenas backend
-- `npm run frontend:dev` - Apenas frontend
-- `npm run install:all` - Instalação completa
+**Desenvolvido com ❤️ pela equipe Discrepômetro**
