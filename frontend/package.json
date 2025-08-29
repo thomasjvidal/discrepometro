@@ -7,7 +7,12 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "security:audit": "node scripts/security-audit.js",
+    "security:check": "npm audit --audit-level=moderate",
+    "security:fix": "npm audit fix",
+    "deps:update": "npm update",
+    "deps:check": "npm outdated"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.0",
