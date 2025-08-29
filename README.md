@@ -1,204 +1,142 @@
-# 🚀 Discrepômetro - Radar Fiscal Inteligente
+# 🚀 DISCREPÔMETRO - Análise Fiscal Inteligente
 
-Sistema automatizado para detectar discrepâncias entre inventário declarado e movimentações fiscais, identificando inconsistências e calculando os produtos mais vendidos.
+Sistema automatizado para análise de discrepâncias de estoque com base em planilhas de vendas e inventários em PDF.
 
-## 📋 Visão Geral
+## 📋 Funcionalidades
 
-O **Discrepômetro** é um sistema inteligente que:
+- **Leitura automática** de planilhas CSV/Excel com milhões de linhas
+- **Filtragem inteligente** de CFOPs de venda (5101, 5102, 6101, 6102, 5405, 6405)
+- **Identificação automática** dos 10 produtos mais vendidos
+- **Processamento de PDFs** de inventário com detecção automática de anos
+- **Cálculo preciso** de discrepâncias de estoque
+- **Classificação automática** em OK/ALERTA/CRÍTICO
+- **Interface web moderna** para upload e análise
 
-1. **Processa 4 arquivos** (2 PDFs de inventário + 2 planilhas de movimentação)
-2. **Identifica os produtos mais vendidos** baseado em CFOPs de venda
-3. **Compara vendas com inventários** para detectar discrepâncias
-4. **Gera relatório visual** com estatísticas e alertas
-
-## 🎯 Objetivo
-
-Automatizar a análise fiscal comparativa entre anos diferentes, identificando:
-- ✅ Produtos vendidos sem estoque suficiente
-- ✅ Discrepâncias entre inventário físico e contábil
-- ✅ Top produtos mais vendidos
-- ✅ Alertas de conformidade fiscal
-
-## 🚀 Instalação
-
-### 1. Clonar o repositório
-```bash
-git clone <url-do-repositorio>
-cd discrepometro
-```
-
-### 2. Instalar dependências Python
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Instalar dependências Node.js
-```bash
-npm install
-```
-
-### 4. Configurar Supabase
-- Copiar as credenciais do Supabase para `src/lib/supabase.ts`
-- Executar as migrações do banco de dados
-
-## 🧪 Teste Rápido
-
-### 1. Executar análise
-```bash
-python discrepometro_final.py
-```
-
-### 2. Iniciar interface web
-```bash
-npm run dev
-```
-
-### 3. Acessar aplicação
-```
-http://localhost:5173
-```
-
-## 📊 Uso via CLI
-
-### Análise com arquivos próprios
-```bash
-python discrepometro_final.py
-```
-
-### Interface web
-```bash
-npm run dev
-```
-
-## 🔧 Estrutura do Projeto
+## 🏗️ Arquitetura
 
 ```
 discrepometro/
-├── discrepometro_final.py    # Script principal Python
-├── requirements.txt          # Dependências Python
-├── package.json             # Dependências Node.js
-├── src/                     # Frontend React
-│   ├── App.tsx             # Aplicação principal
-│   ├── pages/              # Páginas da aplicação
-│   ├── components/         # Componentes React
-│   ├── services/           # Serviços de processamento
-│   └── utils/              # Utilitários
-├── supabase/               # Configurações do banco
-└── README.md               # Este arquivo
+├── frontend/           # Interface React/TypeScript
+├── backend/            # Backend Python + Node.js
+│   ├── core/          # Lógica principal do discrepômetro
+│   ├── readers/       # Leitura de planilhas e PDFs
+│   ├── server/        # Servidor Node.js para API
+│   └── utils/         # Utilitários Python
+├── supabase/          # Banco de dados e funções
+└── docs/              # Documentação
 ```
 
-## 📈 Lógica de Funcionamento
+## ⚙️ Como Funciona
 
-### Etapa 1: Processamento de Planilhas
-- ✅ Carrega CSV/Excel com milhões de linhas
-- ✅ Filtra CFOPs de venda: `5101`, `5102`, `6101`, `6102`, `5405`, `6405`
-- ✅ Agrupa por produto e soma quantidades
-- ✅ Identifica top produtos mais vendidos
+### 1. **Leitura da Planilha**
+- Carrega arquivos CSV/Excel
+- Filtra apenas CFOPs de venda
+- Agrupa por produto e soma quantidades
+- Identifica os 10 produtos mais vendidos
 
-### Etapa 2: Processamento de PDFs
-- ✅ Extrai tabelas dos PDFs de inventário
-- ✅ Detecta automaticamente ano (2023/2024)
-- ✅ Busca produtos específicos nos inventários
-- ✅ Extrai quantidade e valor final
+### 2. **Processamento de PDFs**
+- Detecta automaticamente o ano do inventário
+- Lê primeiro o PDF mais antigo, depois o mais recente
+- Extrai tabelas de estoque
+- Busca produtos específicos nos inventários
 
-### Etapa 3: Cálculo de Discrepâncias
-- ✅ Compara quantidade vendida vs estoque final
-- ✅ Calcula diferença: `Estoque_2024 - Estoque_2023 - Vendas`
-- ✅ Classifica status: **OK** / **ALERTA** / **CRÍTICO**
+### 3. **Cálculo de Discrepâncias**
+- Fórmula: `Discrepância = Estoque_2024 - Estoque_2023 - Vendas`
+- Classificação:
+  - **OK** → Discrepância nula ou dentro da margem
+  - **ALERTA** → Diferença significativa
+  - **CRÍTICO** → Discrepância grave
 
-## �� Formato de Saída
+## 🚀 Instalação
 
-### JSON de Relatório
-```json
-{
-  "timestamp": "2024-01-15T10:30:00",
-  "estatisticas": {
-    "total_produtos": 10,
-    "criticos": 3,
-    "alertas": 2,
-    "ok": 5,
-    "percentual_critico": 30.0,
-    "valor_total_vendido": 25000.00,
-    "quantidade_total_vendida": 5000
-  },
-  "discrepancias": [
-    {
-      "produto": "Caneta Azul BIC",
-      "quantidade_vendida": 500,
-      "quantidade_inventario": 200,
-      "diferenca": -300,
-      "status": "CRÍTICO",
-      "codigo": "CAN001",
-      "valor_total_vendido": 2500.00,
-      "cfops_utilizados": ["5101", "6101"]
-    }
-  ]
-}
+### Pré-requisitos
+- Python 3.9+
+- Node.js 18+
+- npm ou yarn
+
+### Backend Python
+```bash
+cd backend
+pip install -r requirements.txt
 ```
 
-## 🎯 Status de Discrepância
-
-### ✅ OK
-- Diferença pequena (≤ 10% da quantidade vendida)
-- Produto encontrado em ambos os inventários
-
-### ⚠️ ALERTA
-- Diferença moderada (> 10% da quantidade vendida)
-- Sobra muito estoque
-
-### 🚨 CRÍTICO
-- Produto não encontrado no inventário
-- Vendeu mais do que tinha em estoque
-- Diferença muito grande
-
-## 🔧 Configuração Avançada
-
-### CFOPs de Venda
-Editar em `src/utils/realDiscrepancyCalculator.ts`:
-```typescript
-// CFOPs de venda: 5xxx, 6xxx, 7xxx
-if (cfopNum >= 5000 && cfopNum < 8000) {
+### Backend Node.js
+```bash
+cd backend
+npm install
+npm start
 ```
 
-### Limite de Discrepância
-Editar em `src/utils/realDiscrepancyCalculator.ts`:
-```typescript
-// Se a diferença é muito grande (mais de 10% da quantidade vendida)
-if (abs(diferenca_esperada) > (quantidade_vendida * 0.1):
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-## 🐛 Troubleshooting
+## 📁 Estrutura de Arquivos
 
-### Erro: "Arquivos não encontrados"
-- ✅ Verificar se os 4 arquivos estão no diretório
-- ✅ Verificar nomes dos arquivos (deve conter ano)
-- ✅ Usar dados de exemplo como referência
+### Planilha de Vendas
+- **Formato**: CSV ou Excel
+- **Colunas obrigatórias**: `Data`, `Produto`, `CFOP`, `Quantidade`, `Valor`
+- **CFOPs válidos**: 5101, 5102, 6101, 6102, 5405, 6405
 
-### Erro: "Nenhuma tabela encontrada no PDF"
-- ✅ Verificar se o PDF contém tabelas
-- ✅ Verificar se o PDF não está corrompido
-- ✅ Testar com PDFs de exemplo
+### PDFs de Inventário
+- **Formato**: PDF com tabelas
+- **Nomenclatura**: `inventario_2023.pdf`, `estoque_final_2024.pdf`
+- **Colunas**: `Produto`, `Quantidade`, `Valor Total`
 
-### Erro: "Colunas não encontradas"
-- ✅ Verificar se as planilhas têm as colunas necessárias
-- ✅ Verificar nomes das colunas (produto, quantidade, cfop)
-- ✅ Usar dados de exemplo como referência
+## 🔧 Uso
+
+### Via Interface Web
+1. Acesse a tela "Analysis"
+2. Faça upload da planilha de vendas
+3. Faça upload dos 2 PDFs de inventário
+4. Aguarde a análise automática
+5. Visualize os resultados
+
+### Via Python
+```python
+from backend.discrepometro import DiscrepometroOrchestrator
+
+discrepometro = DiscrepometroOrchestrator()
+resultado = discrepometro.executar_analise_completa()
+```
+
+## 📊 Exemplo de Resultado
+
+| Produto     | Qtd 2023 | Qtd 2024 | Vendido | Discrepância | Status     |
+| ----------- | -------- | -------- | ------- | ------------ | ---------- |
+| Pneu Aro 14 | 10       | 0        | 8       | -2           | ⚠️ ALERTA  |
+| Bateria 60A | 5        | 20       | 15      | 0            | ✅ OK       |
+| Óleo 20W50  | 30       | 45       | 5       | +10          | 🔥 CRÍTICO |
+
+## 🛠️ Tecnologias
+
+- **Frontend**: React, TypeScript, Tailwind CSS
+- **Backend Python**: Pandas, PDFPlumber, FastAPI
+- **Backend Node.js**: Express, Multer, CORS
+- **Banco de Dados**: Supabase (PostgreSQL)
+- **Deploy**: Vercel, Railway, Heroku
+
+## 📝 Licença
+
+MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+## 🤝 Contribuição
+
+1. Fork o projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
+5. Abra um Pull Request
 
 ## 📞 Suporte
 
-Para dúvidas ou problemas:
-1. Verificar logs em `discrepometro.log`
-2. Executar com dados de exemplo primeiro
-3. Verificar formato dos arquivos de entrada
-
-## 🚀 Próximos Passos
-
-- [ ] Integração com FastAPI
-- [ ] Interface web completa
-- [ ] Processamento em lote
-- [ ] Relatórios em PDF
-- [ ] Integração com bancos de dados
+- **Email**: suporte@discrepometro.com
+- **Documentação**: [docs.discrepometro.com](https://docs.discrepometro.com)
+- **Issues**: [GitHub Issues](https://github.com/discrepometro/issues)
 
 ---
 
-**Desenvolvido com ❤️ para automatizar análises fiscais**
+**Desenvolvido com ❤️ pela equipe Discrepômetro**
