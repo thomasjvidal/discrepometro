@@ -20,9 +20,9 @@ python test_simple.py
 python start_server.py
 ```
 
-### 4. Acessar a API
-- **Servidor**: http://localhost:8000
-- **Documentação**: http://localhost:8000/docs
+### 4. Iniciar a API
+- **Servidor**: Local na porta padrão
+- **Documentação**: Disponível na rota /docs
 
 ## 📁 Estrutura do Projeto
 
@@ -46,10 +46,10 @@ backend/
 ## 📊 Como Funciona
 
 1. **Upload de Arquivos**: Planilha Excel + 2 PDFs de inventário
-2. **Extração de Dados**: Top N produtos mais vendidos da planilha
+2. **Extração de Dados**: Produtos mais vendidos da planilha
 3. **Processamento de PDFs**: Busca estoque inicial e final de cada produto
-4. **Cálculo de Discrepâncias**: Estoque esperado vs. estoque real
-5. **Relatório**: Resultados com classificação e recomendações
+4. **Cálculo de Diferenças**: Comparação entre períodos
+5. **Relatório**: Resultados com classificação automática
 
 ## 🔧 Endpoints da API
 
@@ -57,41 +57,17 @@ backend/
 - `GET /get_results/{filename}` - Recupera resultados
 - `GET /list_results` - Lista análises disponíveis
 
-## 📝 Exemplo de Uso
 
-```python
-import requests
-
-# Upload de arquivos
-files = [
-    ('files', open('planilha.xlsx', 'rb')),
-    ('files', open('inventario_inicial.pdf', 'rb')),
-    ('files', open('inventario_final.pdf', 'rb'))
-]
-
-data = {
-    'max_produtos': 10,
-    'tolerancia': 1.0
-}
-
-response = requests.post(
-    'http://localhost:8000/process_files',
-    files=files,
-    data=data
-)
-
-print(response.json())
-```
 
 ## 🎯 Foco do Sistema
 
-- ✅ **Simplicidade**: Apenas o essencial para análise de discrepâncias
-- ✅ **Performance**: Python otimizado para processamento de dados
-- ✅ **Confiabilidade**: Bibliotecas maduras para Excel e PDF
-- ✅ **Integração**: API REST para frontend React
+- ✅ **Simplicidade**: Interface clara e objetiva
+- ✅ **Performance**: Processamento otimizado de dados
+- ✅ **Confiabilidade**: Leitura precisa de arquivos
+- ✅ **Integração**: API REST para frontend
 
 ## 🔍 Para Mais Informações
 
 - Execute `python test_simple.py` para verificar funcionamento
-- Acesse http://localhost:8000/docs para documentação da API
+- Acesse a rota /docs para documentação da API
 - Consulte os logs do servidor para detalhes do processamento
